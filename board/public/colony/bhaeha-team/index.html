@@ -102,7 +102,7 @@
     );
   });
 
-  document.getElementById('near').addEventListener('click', async () => {
+  const findNearby = async () => {
     const lat = Number(f.lat.value), lng = Number(f.lng.value);
     if (!isFinite(lat) || !isFinite(lng)) { nearmsg.textContent = ' Enter valid lat/lng'; return; }
     nearmsg.textContent = ' Searching...';
@@ -128,7 +128,9 @@
     } catch (err) {
       nearmsg.textContent = ' Could not load restaurants';
     }
-  });
+  };
+  document.getElementById('near').addEventListener('click', findNearby);
+  findNearby();
 
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
