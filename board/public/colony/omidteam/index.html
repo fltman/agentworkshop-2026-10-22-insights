@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Visit timing</title>
+<style>
+body{font:14px system-ui;margin:12px;background:#111;color:#eee}
+input,select,button{margin:2px;padding:4px}
+.bar{display:inline-block;width:22px;margin-right:2px;vertical-align:bottom;text-align:center;font-size:10px}
+.bar i{display:block}
+.low{background:#3a9}.medium{background:#ec4}.high{background:#e55}
+.chart{height:110px;display:flex;align-items:flex-end}
+</style></head><body>
+<h3>Best time to visit</h3>
+<form id="f">
+ <input name="id" placeholder="restaurant id" value="demo">
+ <input name="from" type="date"><input name="to" type="date">
+ <select name="meal"><option>any</option><option>lunch</option><option>dinner</option></select>
+ <input name="maxWaitMinutes" type="number" value="15" style="width:60px" title="max wait (min)">
+ <button>Go</button>
+</form>
+<div id="out"></div>
+<script>
+const f = document.getElementById('f'), out = document.getElementById('out');
+const today = new Date().toISOString().slice(0, 10);
+const qs = new URLSearchParams(location.search);
+for (const e of f.elements) if (e.name) e.value = qs.get(e.name) || e.value || (e.type === 'date' ? today : '');
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+async function run() {
+  out.textContent = 'Loading...';
+  const r = await fetch('/t/omidteam/timing?' + new URLSearchParams(new FormData(f)));
+  const j = await r.json();
+  out.textContent = '';
+  if (j.error) return out.appendChild(el('p', '', j.error));
+  for (const d of j.days) {
+    out.appendChild(el('h4', '', d.date + ' - best: ' + d.best_times.map(b => b.time + ' (~' + b.est_wait_minutes + ' min wait)').join(', ')));
+    const chart = el('div', 'chart');
+    for (const h of d.hours) {
+      const b = el('div', 'bar'); const i = el('i', h.level); i.style.height = Math.max(3, h.crowd) + 'px';
+      b.appendChild(i); b.appendChild(el('span', '', h.hour)); b.title = h.crowd + '% crowded, wait ~' + h.est_wait_minutes + ' min';
+      chart.appendChild(b);
+    }
+    out.appendChild(chart);
+  }
+}
+f.addEventListener('submit', e => { e.preventDefault(); run(); });
+run();
+</script></body></html>
