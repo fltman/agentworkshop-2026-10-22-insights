@@ -124,6 +124,16 @@
     markers.clearLayers();
     try {
       let data;
+      // Google Places (our server-side proxy) when a key is configured, then daniela's discovery, then the fallback chain.
+      try {
+        data = await getJson('/t/seba5tian/places', {
+          lat: here.lat, lng: here.lng,
+          radius_m: (params.location && params.location.radius_m) || 1500,
+          cuisines: (params.cuisines || []).join(','),
+        });
+        if (!(data.restaurants || []).length) throw new Error('no places');
+        data.source = 'Google Places';
+      } catch (g) {
       try {
         data = await getJson(modules.discovery.path, {
         lat: here.lat,
@@ -136,6 +146,7 @@
         });
       } catch (e) {
         data = { restaurants: await fallbackChain(params), fallback: true };
+      }
       }
       let list = (data.restaurants || data || []).map(normalize);
       list = list.filter((r) => !params.price_max || !r.price || r.price.length <= params.price_max);
@@ -150,7 +161,7 @@
       });
       renderList(list);
       addBadges(list.slice(0, 25), params);
-      setStatus(list.length + ' restaurants found' + (data.fallback ? ' (fallback: ' + fallbackSource + '; discovery module unavailable)' : ''));
+      setStatus(list.length + ' restaurants found' + (data.fallback ? ' (fallback: ' + fallbackSource + '; discovery module unavailable)' : (data.source === 'Google Places' ? ' (Google Places)' : '')));
     } catch (e) {
       setStatus('Search failed: ' + e.message);
     }

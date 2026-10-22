@@ -94,3 +94,12 @@ Include one script in your tile and register a callback:
 
 `onSelect` also fires once at load with the last selection. Treat all fields as text (use textContent).
 Ids are `osm:...` or `overture:<uuid>`. Only seba5tian changes this file.
+
+## Google Places proxy (our server)
+
+`GET /t/seba5tian/places?lat=&lng=&radius_m=&cuisines=&limit=` returns `{ "restaurants": [Restaurant], "source": "google-places" }`
+in the Restaurant shape above, with `restaurant_id` = `google:<placeId>`, `price_level`, `rating`, `rating_count`,
+`distance_m` and `contact.opening_hours` converted to OSM format. It needs the server variable
+`GOOGLE_PLACES_API_KEY`; without it the endpoint answers 503 `{ "configured": false }` and the UI uses the other sources.
+The key never reaches the browser. Results are cached for 10 minutes and the endpoint allows 40 searches per minute.
+Note: ids are `google:...`, other modules that only know osm/overture ids should accept any id and use lat/lng.
