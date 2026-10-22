@@ -45,7 +45,8 @@ Additive fields (only present for ids found in OpenStreetMap): `website`, `openi
 Notes:
 - Ids of the form `osm:<node|way|relation>:<number>` are looked up in OpenStreetMap (Overpass). OSM has no menus, so the result has `source: "osm"`, a `menu_url` when tagged, and empty `days`/`offers` (nothing is invented). With `demo=1` the source is `"osm+mock"`.
 - Any other id, or an OSM lookup failure, falls back to `source: "mock"` with generated days and offers.
-- `source` is always one of `"mock"`, `"osm"`, `"osm+mock"`.
+- `source: "website"`: the OSM `menu_url` page was fetched and "dish + price" lines were extracted (heuristic, undated, so the same items are listed for every date in the range, `daily_special` false, confidence 0.4).
+- `source` is always one of `"mock"`, `"osm"`, `"website"`, `"osm+mock"`.
 - `days`/`offers` may be empty arrays; `menu_url` may be `null`.
 - `price` may be `null`.
 

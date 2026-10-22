@@ -5,6 +5,10 @@ const MAX_DAYS = 31;
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
 const CACHE_TTL = 6 * 3600 * 1000;
 const cache = new Map();
+const pageCache = new Map();
+const dns = require('dns').promises;
+const net = require('net');
+const MAX_PAGE_BYTES = 500000;
 
 const DISHES = [
   { name: 'Soup of the day', price: 8.5, tags: ['vegetarian'] },
@@ -107,12 +111,62 @@ function fromOsm(id, from, to, tags) {
   };
 }
 
+function isPrivateIp(ip) {
+  if (net.isIPv6(ip)) return /^(::1?$|fc|fd|fe80|::ffff:)/i.test(ip);
+  const [a, b] = ip.split('.').map(Number);
+  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168);
+}
+
+// Fetches a public menu page and extracts "dish ... price" lines. Heuristic: pages are not dated, so items apply to the whole range.
+async function scrapeMenu(url) {
+  const hit = pageCache.get(url);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.items;
+  let items = [];
+  try {
+    const u = new URL(url);
+    const addrs = await dns.lookup(u.hostname, { all: true });
+    if (!addrs.length || addrs.some((a) => isPrivateIp(a.address))) return [];
+    const r = await fetch(url, {
+      headers: { 'user-agent': 'tablewise-workshop/1.0', accept: 'text/html' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(6000),
+    });
+    const type = r.headers.get('content-type') || '';
+    if (!r.ok || !/text\/html|text\/plain/.test(type)) return [];
+    const html = (await r.text()).slice(0, MAX_PAGE_BYTES);
+    const text = html
+      .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<\/(p|div|li|tr|h\d|br)>|<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&');
+    const seen = new Set();
+    for (const raw of text.split('\n')) {
+      const line = raw.replace(/\s+/g, ' ').trim();
+      const m = /^(.{3,80}?)[\s.:–-]+(?:[€$£]\s?)?(\d{1,3}(?:[.,]\d{1,2})?)\s?(?:€|kr|SEK|EUR|:-|\$|£)?$/.exec(line);
+      if (!m || !/[a-zA-ZÀ-ÿ]{3}/.test(m[1])) continue;
+      const price = Number(m[2].replace(',', '.'));
+      const hasCur = /[€$£]|kr|SEK|EUR|:-/.test(line);
+      if (!hasCur || !price || seen.has(m[1])) continue;
+      seen.add(m[1]);
+      items.push({ name: m[1].slice(0, 80), price, currency: /\$/.test(line) ? 'USD' : /£/.test(line) ? 'GBP' : /kr|SEK|:-/.test(line) ? 'SEK' : 'EUR', tags: [], daily_special: false });
+      if (items.length >= 30) break;
+    }
+  } catch (err) {
+    console.error('[bhaeha-team] scrape:', err && err.message);
+    items = [];
+  }
+  pageCache.set(url, { ts: Date.now(), items });
+  return items;
+}
+
 function send(res, code, body) {
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*' });
   res.end(JSON.stringify(body));
 }
 
 module.exports = {
+  _scrapeMenu: scrapeMenu,
   async handle(req, res, { path }) {
     if (req.method !== 'GET' || path !== '/menu') return false;
     try {
@@ -131,7 +185,16 @@ module.exports = {
       if ((to - from) / 86400000 + 1 > MAX_DAYS) return send(res, 400, { error: `range is limited to ${MAX_DAYS} days` }), true;
       const tags = await lookupOsm(id);
       const demo = q.get('demo') === '1';
-      if (tags && !demo) return send(res, 200, fromOsm(id, from, to, tags)), true;
+      if (tags && !demo) {
+        const out = fromOsm(id, from, to, tags);
+        const items = out.menu_url ? await scrapeMenu(out.menu_url) : [];
+        if (items.length) {
+          for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86400000)) out.days.push({ date: iso(d), items });
+          out.source = 'website';
+          out.confidence = 0.4;
+        }
+        return send(res, 200, out), true;
+      }
       const out = build(id, from, to);
       if (tags) Object.assign(out, { ...fromOsm(id, from, to, tags), days: out.days, offers: out.offers, source: 'osm+mock' });
       send(res, 200, out);
