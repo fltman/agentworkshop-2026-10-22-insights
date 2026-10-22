@@ -150,6 +150,14 @@
       const b = body('w-timing');
       if (d.avg_wait_min != null) b.appendChild(el('div', 'Average wait: ' + d.avg_wait_min + ' min'));
       const ul = el('ul');
+      if (!(d.best_times || []).length && (d.days || []).length) {
+        d.days.forEach((day) => {
+          const open = (day.hours || []).filter((h) => h.open !== false && h.crowd != null);
+          if (!open.length) return;
+          const best = open.reduce((a, h) => (h.crowd < a.crowd ? h : a));
+          ul.appendChild(el('li', day.date + ' around ' + best.hour + ':00 (' + (best.level || best.crowd) + ' crowd, ~' + best.est_wait_minutes + ' min wait)'));
+        });
+      }
       (d.best_times || []).forEach((t) => {
         ul.appendChild(el('li', [t.date, t.start && t.end ? t.start + '-' + t.end : t.hour, t.crowd ? '(' + t.crowd + ' crowd)' : '', t.est_wait_min != null ? '~' + t.est_wait_min + ' min wait' : ''].filter(Boolean).join(' ')));
       });
