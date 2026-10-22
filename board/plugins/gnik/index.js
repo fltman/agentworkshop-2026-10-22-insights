@@ -148,6 +148,67 @@ async function siteReviews(url) {
   return texts;
 }
 
+// Google Places (New) reviews. Key stays in the server env, is never returned or logged.
+const G_TTL = 24 * 60 * 60 * 1000;
+const G_NEG_TTL = 60 * 60 * 1000;
+const G_MAX_PER_MIN = 30;
+const gCache = new Map();
+let gWindow = { start: 0, n: 0 };
+
+function gAllowed() {
+  const now = Date.now();
+  if (now - gWindow.start > 60000) gWindow = { start: now, n: 0 };
+  return ++gWindow.n <= G_MAX_PER_MIN;
+}
+
+const reviewTexts = (place) => ((place && place.reviews) || [])
+  .map((r) => (r.originalText && r.originalText.text) || (r.text && r.text.text) || '')
+  .filter(Boolean);
+
+function distM(lat1, lng1, lat2, lng2) {
+  const k = Math.PI / 180;
+  const dx = (lng2 - lng1) * k * Math.cos(((lat1 + lat2) / 2) * k) * 6371000;
+  const dy = (lat2 - lat1) * k * 6371000;
+  return Math.hypot(dx, dy);
+}
+
+async function googleReviews(id, name, lat, lng) {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key) return [];
+  const isGoogle = id.startsWith('google:');
+  const latN = Number(lat), lngN = Number(lng);
+  if (!isGoogle && (!name || !isFinite(latN) || !isFinite(lngN))) return [];
+  const ck = isGoogle ? id : `${id}`;
+  const hit = gCache.get(ck);
+  if (hit && Date.now() - hit.ts < (hit.texts.length ? G_TTL : G_NEG_TTL)) return hit.texts;
+  if (!gAllowed()) return [];
+  let texts = [];
+  try {
+    const headers = { 'X-Goog-Api-Key': key, 'Content-Type': 'application/json' };
+    if (isGoogle) {
+      const pid = id.slice(7);
+      if (!/^[A-Za-z0-9_-]{5,200}$/.test(pid)) return [];
+      const r = await fetch(`https://places.googleapis.com/v1/places/${pid}`, { headers: { ...headers, 'X-Goog-FieldMask': 'reviews' }, signal: AbortSignal.timeout(6000) });
+      if (r.ok) texts = reviewTexts(await r.json());
+    } else {
+      const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: { ...headers, 'X-Goog-FieldMask': 'places.displayName,places.location,places.reviews' },
+        body: JSON.stringify({ textQuery: name, maxResultCount: 1, locationBias: { circle: { center: { latitude: latN, longitude: lngN }, radius: 150 } } }),
+        signal: AbortSignal.timeout(6000),
+      });
+      if (r.ok) {
+        const place = ((await r.json()).places || [])[0];
+        const loc = place && place.location;
+        // Only accept a match that is really at this spot
+        if (loc && distM(latN, lngN, loc.latitude, loc.longitude) <= 150) texts = reviewTexts(place);
+      }
+    }
+  } catch (e) { console.error('[gnik] google:', e && e.name); }
+  gCache.set(ck, { ts: Date.now(), texts });
+  return texts;
+}
+
 module.exports = {
   async handle(req, res, ctx) {
     const url = new URL(req.url, 'http://x');
@@ -174,6 +235,8 @@ module.exports = {
     const real = load(ctx, id);
     if (real.length) { send(res, 200, { id, name, ...analyze(real), source: 'reviews' }); return true; }
     if (url.searchParams.get('demo') === '1') { send(res, 200, { id, name, ...analyze(mockReviews(id)), source: 'mock' }); return true; }
+    const g = await googleReviews(id, name, url.searchParams.get('lat'), url.searchParams.get('lng'));
+    if (g.length) { send(res, 200, { id, name, ...analyze(g), source: 'google' }); return true; }
     const site = (url.searchParams.get('website') && /^https?:\/\//.test(url.searchParams.get('website'))) ? url.searchParams.get('website')
       : await websiteFor(id, url.searchParams.get('lat'), url.searchParams.get('lng'));
     const texts = site ? await siteReviews(site) : [];
