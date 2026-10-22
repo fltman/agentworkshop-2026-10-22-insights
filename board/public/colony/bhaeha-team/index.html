@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bhaeha-team: Menus + Offers</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; }
+  h1 { font-size: 1.2rem; margin: 0 0 4px; }
+  p.sub { margin: 0 0 12px; color: #666; font-size: .85rem; }
+  form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  label { font-size: .75rem; color: #555; display: flex; flex-direction: column; gap: 2px; }
+  input { padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+  button { padding: 8px 12px; border: 0; border-radius: 4px; background: #2563eb; color: #fff; cursor: pointer; align-self: end; }
+  .card { background: #fff; border: 1px solid #e3e3e3; border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+  .card h2 { font-size: .95rem; margin: 0 0 6px; }
+  .badge { display: inline-block; font-size: .7rem; padding: 1px 6px; border-radius: 8px; background: #eef2ff; color: #3730a3; margin-left: 4px; }
+  .err { color: #b91c1c; }
+  ul { margin: 0; padding-left: 18px; }
+  li { font-size: .85rem; }
+</style>
+</head>
+<body>
+<h1>Menus + special offers</h1>
+<p class="sub">Module 3 tester. Calls /t/bhaeha-team/menu</p>
+<form id="f">
+  <label>Restaurant id<input name="id" value="osm:node:1" required></label>
+  <label>Lat<input name="lat" value="59.3293" required></label>
+  <label>Lng<input name="lng" value="18.0686" required></label>
+  <label>From<input name="from" type="date" required></label>
+  <label>To<input name="to" type="date" required></label>
+  <label>Demo data<input name="demo" type="checkbox"></label>
+  <button>Fetch</button>
+</form>
+<div id="out"></div>
+<script>
+  const f = document.getElementById('f');
+  const out = document.getElementById('out');
+  const today = new Date().toISOString().slice(0, 10);
+  f.from.value = today;
+  f.to.value = today;
+
+  function el(tag, text, cls) {
+    const e = document.createElement(tag);
+    if (text !== undefined) e.textContent = text;
+    if (cls) e.className = cls;
+    return e;
+  }
+
+  function render(d) {
+    out.replaceChildren();
+    const head = el('div', '', 'card');
+    const h = el('h2', d.id);
+    h.append(el('span', d.source, 'badge'), el('span', 'confidence ' + d.confidence, 'badge'));
+    head.append(h);
+    if (d.menu_url) head.append(el('div', 'Menu: ' + d.menu_url));
+    if (d.website) head.append(el('div', 'Website: ' + d.website));
+    if (d.opening_hours) head.append(el('div', 'Hours: ' + d.opening_hours));
+    if (d.diet && d.diet.length) head.append(el('div', 'Diet: ' + d.diet.join(', ')));
+    out.append(head);
+
+    for (const day of d.days) {
+      const c = el('div', '', 'card');
+      c.append(el('h2', day.date));
+      const ul = el('ul');
+      for (const it of day.items) {
+        const price = it.price == null ? '' : ' ' + it.price + ' ' + it.currency;
+        ul.append(el('li', it.name + price + (it.daily_special ? ' (special)' : '') + (it.tags.length ? ' [' + it.tags.join(', ') + ']' : '')));
+      }
+      c.append(ul);
+      out.append(c);
+    }
+    if (d.offers.length) {
+      const c = el('div', '', 'card');
+      c.append(el('h2', 'Offers'));
+      const ul = el('ul');
+      for (const o of d.offers) ul.append(el('li', o.title + ': ' + o.description + ' (' + o.valid_from + ' to ' + o.valid_to + ')'));
+      c.append(ul);
+      out.append(c);
+    }
+    if (!d.days.length && !d.offers.length) out.append(el('div', 'No menu items or offers found for this restaurant. Try demo data.'));
+  }
+
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    out.replaceChildren(el('div', 'Loading...'));
+    const q = new URLSearchParams({ id: f.elements.id.value, lat: f.lat.value, lng: f.lng.value, from: f.from.value, to: f.to.value });
+    if (f.demo.checked) q.set('demo', '1');
+    try {
+      const r = await fetch('/t/bhaeha-team/menu?' + q);
+      const d = await r.json();
+      if (!r.ok) out.replaceChildren(el('div', d.error || 'Error', 'err'));
+      else render(d);
+    } catch (err) {
+      out.replaceChildren(el('div', 'Request failed', 'err'));
+    }
+  });
+</script>
+</body>
+</html>
