@@ -30,6 +30,8 @@ Errors: 400 `{ "error": "id required" }`. If no reviews are available, lists are
 
 Alias: `/t/gnik/reviews` is identical. `restaurant_id` is accepted as a synonym for `id`; `from`/`to` are accepted and ignored.
 
+GET response also echoes `name` (the `name` query param, empty if not sent). The tile `/colony/gnik/?id=<id>&name=<restaurant name>` shows the name as its header.
+
 ## POST /t/gnik/reviews?id=<id>
 Body `{ "reviews": ["text", ...] }` (or `{ "review": "text" }`). Stores up to 200 reviews per restaurant; returns 201 `{ id, stored, review_count }`. Once a restaurant has stored reviews, GET returns `source: "reviews"` instead of `"mock"`.
 

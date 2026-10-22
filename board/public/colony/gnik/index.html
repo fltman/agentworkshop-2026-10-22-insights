@@ -20,6 +20,9 @@
   .card h3 { margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); }
   .verdict { display:flex; align-items:center; gap:12px; }
   .score { width:58px; height:58px; border-radius:50%; display:grid; place-items:center; font-weight:700; font-size:18px; color:#fff; flex:none; }
+  .rest { background:linear-gradient(135deg,var(--acc),#00cec9); color:#fff; border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .rest .n { font-size:18px; font-weight:700; }
+  .rest .i { font-size:11px; opacity:.8; word-break:break-all; }
   .muted { color:var(--mut); font-size:12px; }
   .meal { margin:8px 0; }
   .meal .row { display:flex; justify-content:space-between; font-weight:600; }
@@ -35,18 +38,21 @@
 <header><div class="logo">&#127860;</div><h2>Review insights</h2></header>
 <form id="f"><input id="id" placeholder="restaurant id, e.g. osm:node/123"><button>Analyse</button></form>
 <div class="chips" id="chips"></div>
-<div id="out" class="muted">Pick a sample or pass ?id=osm:node/123.</div>
+<div id="out" class="muted">Click a restaurant on the map, pick a sample, or pass ?id=...&amp;name=...</div>
 <script>
 // Embed: /colony/gnik/?id=<restaurant_id>. All text is inserted with textContent.
 const out = document.getElementById('out');
 const ICON = { wait_time: '\u23F3', cleanliness: '\uD83E\uDDFD', service: '\uD83D\uDE45', price: '\uD83D\uDCB8', dish_warning: '\u26A0\uFE0F' };
-const SAMPLES = ['osm:node/123', 'osm:node/456', 'osm:node/789', 'osm:node/2024', 'osm:node/31415'];
+const SAMPLES = [['Trattoria Roma', 'osm:node/123'], ['Sushi Garden', 'osm:node/456'], ['Burger Barn', 'osm:node/789'], ['Thai Orchid', 'osm:node/2024']];
 
 function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
 function card(title) { const c = el('div', null, 'card'); c.append(el('h3', title)); return c; }
 
-function render(d) {
+function render(d, name) {
   const frag = document.createDocumentFragment();
+  const h = el('div', null, 'rest');
+  h.append(el('div', name || d.name || 'Selected restaurant', 'n'), el('div', 'id: ' + d.id, 'i'));
+  frag.append(h);
   const pen = d.red_flags.reduce((n, f) => n + (f.severity === 'high' ? 25 : f.severity === 'medium' ? 12 : 5), 0);
   const avg = d.suggested_meals.length ? d.suggested_meals.reduce((n, m) => n + m.sentiment, 0) / d.suggested_meals.length : 0.5;
   const score = Math.max(0, Math.min(100, Math.round(avg * 100 - pen)));
@@ -83,26 +89,27 @@ function render(d) {
   out.replaceChildren(frag);
 }
 
-async function load(id) {
+async function load(id, name) {
   out.replaceChildren(el('div', 'Analysing reviews...', 'muted'));
   try {
-    const r = await fetch('/t/gnik/reviews?id=' + encodeURIComponent(id));
+    const r = await fetch('/t/gnik/reviews?id=' + encodeURIComponent(id) + '&name=' + encodeURIComponent(name || ''));
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || r.status);
-    render(d);
+    render(d, name);
   } catch (e) {
     out.replaceChildren(el('div', 'Could not load: ' + e.message, 'muted'));
   }
 }
 
-SAMPLES.forEach((s) => { const c = el('button', s, 'chip'); c.type = 'button'; c.onclick = () => { document.getElementById('id').value = s; load(s); }; document.getElementById('chips').append(c); });
+SAMPLES.forEach(([n, s]) => { const c = el('button', n, 'chip'); c.type = 'button'; c.onclick = () => { document.getElementById('id').value = s; load(s, n); }; document.getElementById('chips').append(c); });
 document.getElementById('f').addEventListener('submit', (e) => {
   e.preventDefault();
   const v = document.getElementById('id').value.trim();
   if (v) load(v);
 });
-const q = new URLSearchParams(location.search).get('id');
-if (q) { document.getElementById('id').value = q; load(q); }
+const params = new URLSearchParams(location.search);
+const q = params.get('id') || params.get('restaurant_id');
+if (q) { document.getElementById('id').value = q; load(q, params.get('name') || ''); }
 </script>
 </body>
 </html>

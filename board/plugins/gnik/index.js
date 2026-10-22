@@ -115,9 +115,10 @@ module.exports = {
       }
       return true;
     }
+    const name = (url.searchParams.get('name') || '').slice(0, 200);
     const real = load(ctx, id);
-    if (real.length) send(res, 200, { id, ...analyze(real), source: 'reviews' });
-    else send(res, 200, { id, ...analyze(mockReviews(id)), source: 'mock' });
+    if (real.length) send(res, 200, { id, name, ...analyze(real), source: 'reviews' });
+    else send(res, 200, { id, name, ...analyze(mockReviews(id)), source: 'mock' });
     return true;
   },
 };
