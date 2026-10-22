@@ -6,6 +6,7 @@
 <title>bhaeha-team: Menus + Offers</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
+  #map.big { height: 80vh; }
   #map { height: 360px; border-radius: 6px; margin: 8px 0; }
   body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; }
   h1 { font-size: 1.2rem; margin: 0 0 4px; }
@@ -34,9 +35,10 @@
   <button>Fetch</button>
 </form>
 <div class="card">
-  <h2>Nearby restaurants (live OpenStreetMap, Overture fallback)</h2>
+  <h2>Nearby restaurants (live Google Places or OpenStreetMap, Overture fallback)</h2>
   <button type="button" id="loc">Use my location</button>
   <button type="button" id="near">Find nearby</button>
+  <button type="button" id="big">Maximise map</button>
   <span id="nearmsg"></span>
   <div id="map"></div>
   <ul id="list"></ul>
@@ -71,6 +73,15 @@
     if (d.opening_hours) head.append(el('div', 'Hours: ' + d.opening_hours));
     if (d.diet && d.diet.length) head.append(el('div', 'Diet: ' + d.diet.join(', ')));
     out.append(head);
+
+    if (d.google) {
+      const g = el('div', '', 'card');
+      g.append(el('h2', 'Google Places data'));
+      const ul = el('ul');
+      for (const [k, v] of Object.entries(d.google)) ul.append(el('li', k.replace(/_/g, ' ') + ': ' + (Array.isArray(v) ? v.join(' | ') : v)));
+      g.append(ul);
+      out.append(g);
+    }
 
     for (const day of d.days) {
       const c = el('div', '', 'card');
@@ -109,49 +120,81 @@
   const map = L.map('map').setView([59.3293, 18.0686], 14);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
   const markers = L.layerGroup().addTo(map);
+  const known = new Map();
+  const shown = new Set();
   let me = null;
+  let token = 0;
+  let timer = null;
 
-  const findNearby = async () => {
+  const pick = (e) => {
+    f.elements.id.value = e.id;
+    f.lat.value = e.lat;
+    f.lng.value = e.lng;
+    f.requestSubmit();
+  };
+
+  const renderList = () => {
+    const c = map.getCenter();
+    const inView = [...known.values()].filter((e) => map.getBounds().contains([e.lat, e.lng]))
+      .map((e) => ({ e, d: Math.round(c.distanceTo([e.lat, e.lng])) }))
+      .sort((x, y) => x.d - y.d);
+    list.replaceChildren();
+    for (const { e, d } of inView.slice(0, 300)) {
+      const li = el('li');
+      const b = el('button', e.name + (e.category ? ' (' + e.category.replace(/_/g, ' ') + ')' : '') + ' ' + d + ' m');
+      b.type = 'button';
+      b.addEventListener('click', () => pick(e));
+      li.append(b);
+      list.append(li);
+    }
+    return inView.length;
+  };
+
+  // Loads restaurants for whatever the map currently shows, so panning, zooming and maximising load more.
+  const loadView = async () => {
+    const my = ++token;
+    const c = map.getCenter();
+    const radius = Math.min(Math.max(Math.round(c.distanceTo(map.getBounds().getNorthEast())), 100), 5000);
+    if (map.getZoom() < 13) { nearmsg.textContent = ' Zoom in to load restaurants'; return; }
+    nearmsg.textContent = ' Loading...';
+    try {
+      const r = await fetch('/t/bhaeha-team/restaurants?' + new URLSearchParams({ lat: c.lat, lng: c.lng, radius_m: radius, limit: 300, live: 1 }));
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'failed');
+      if (my !== token) return;
+      for (const e of j.restaurants) {
+        known.set(e.id, e);
+        if (shown.has(e.id)) continue;
+        shown.add(e.id);
+        const m = L.marker([e.lat, e.lng]).addTo(markers);
+        m.bindTooltip(e.name);
+        m.on('click', () => pick(e));
+      }
+      const n = renderList();
+      nearmsg.textContent = ' ' + n + ' in view, ' + known.size + ' loaded (' + ({ google: 'live Google Places', osm: 'live OpenStreetMap' }[j.source] || 'bundled Overture data') + ')';
+    } catch (err) {
+      if (my === token) nearmsg.textContent = ' Could not load restaurants';
+    }
+  };
+  const scheduleLoad = () => { clearTimeout(timer); timer = setTimeout(loadView, 500); };
+  map.on('moveend', scheduleLoad);
+  map.on('resize', scheduleLoad);
+
+  const findNearby = () => {
     const lat = Number(f.lat.value), lng = Number(f.lng.value);
     if (!isFinite(lat) || !isFinite(lng)) { nearmsg.textContent = ' Enter valid lat/lng'; return; }
-    nearmsg.textContent = ' Searching...';
-    list.replaceChildren();
-    markers.clearLayers();
     if (me) me.remove();
     me = L.circleMarker([lat, lng], { radius: 8, color: '#2563eb', fillOpacity: 0.8 }).addTo(map).bindTooltip('You');
     map.setView([lat, lng], 16);
-    try {
-      const r = await fetch('/t/bhaeha-team/restaurants?' + new URLSearchParams({ lat, lng, radius_m: 800, limit: 25, live: 1 }));
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'failed');
-      nearmsg.textContent = ' ' + j.restaurants.length + ' found (' + (j.source === 'osm' ? 'live OpenStreetMap' : 'bundled Overture data') + ')';
-      for (const e of j.restaurants) {
-        const open = () => {
-          f.elements.id.value = e.id;
-          f.lat.value = e.lat;
-          f.lng.value = e.lng;
-          f.requestSubmit();
-        };
-        const m = L.marker([e.lat, e.lng]).addTo(markers);
-        m.bindTooltip(e.name);
-        m.on('click', open);
-        const li = el('li');
-        const b = el('button', e.name + (e.category ? ' (' + e.category.replace(/_/g, ' ') + ')' : '') + ' ' + e.distance_m + ' m');
-        b.type = 'button';
-        b.addEventListener('click', () => {
-          f.elements.id.value = e.id;
-          f.lat.value = e.lat;
-          f.lng.value = e.lng;
-          f.requestSubmit();
-        });
-        li.append(b);
-        list.append(li);
-      }
-    } catch (err) {
-      nearmsg.textContent = ' Could not load restaurants';
-    }
+    scheduleLoad();
   };
   document.getElementById('near').addEventListener('click', findNearby);
+  document.getElementById('big').addEventListener('click', (ev) => {
+    const mapEl = document.getElementById('map');
+    const big = mapEl.classList.toggle('big');
+    ev.target.textContent = big ? 'Minimise map' : 'Maximise map';
+    map.invalidateSize();
+  });
   findNearby();
 
   f.addEventListener('submit', async (e) => {

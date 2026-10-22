@@ -66,3 +66,7 @@ Currency: prices are in SEK (Swedish kronor) by default. Scraped pages keep thei
 ## Why a menu is empty
 
 When `/menu` finds no items it adds `empty_reason` (`no_website`, `site_unreachable`, `menu_is_pdf_or_image`, `no_readable_menu`) and a human-readable `empty_message`. UIs can show `empty_message` instead of a generic "no menu".
+
+## Google Places data (only for `google:<place_id>` ids, needs the server key)
+
+`/menu` adds `google`: an object of plain facts (rating, rating_count, price_level, price_range, status, type, summary, phone, address, website, google_maps, open_now, opening_hours[], features[], serves[], accessibility[], payment[], parking[]). Fields Google does not return are omitted. Google has no menu items or offers, so `days` and `offers` still come only from the restaurant's own website.
