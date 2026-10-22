@@ -38,8 +38,14 @@ Response 200:
 }
 ```
 
+Optional query parameter: `demo=1` fills `days` and `offers` with mock data even when real data exists.
+
+Additive fields (only present for ids found in OpenStreetMap): `website`, `opening_hours`, `diet` (e.g. `["vegetarian"]`).
+
 Notes:
-- `source` is `"mock"`, `"osm"`, `"website"` etc. Mock data is always labelled.
+- Ids of the form `osm:<node|way|relation>:<number>` are looked up in OpenStreetMap (Overpass). OSM has no menus, so the result has `source: "osm"`, a `menu_url` when tagged, and empty `days`/`offers` (nothing is invented). With `demo=1` the source is `"osm+mock"`.
+- Any other id, or an OSM lookup failure, falls back to `source: "mock"` with generated days and offers.
+- `source` is always one of `"mock"`, `"osm"`, `"osm+mock"`.
 - `days`/`offers` may be empty arrays; `menu_url` may be `null`.
 - `price` may be `null`.
 

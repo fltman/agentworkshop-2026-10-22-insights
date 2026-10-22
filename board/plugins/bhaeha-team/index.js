@@ -2,6 +2,9 @@
 //   GET /t/bhaeha-team/menu?id=&lat=&lng=&from=YYYY-MM-DD&to=YYYY-MM-DD
 
 const MAX_DAYS = 31;
+const OVERPASS = 'https://overpass-api.de/api/interpreter';
+const CACHE_TTL = 6 * 3600 * 1000;
+const cache = new Map();
 
 const DISHES = [
   { name: 'Soup of the day', price: 8.5, tags: ['vegetarian'] },
@@ -58,6 +61,52 @@ function build(id, from, to) {
   };
 }
 
+// Looks up a restaurant by id "osm:<node|way|relation>:<n>" in OpenStreetMap. Returns null when unknown or on failure.
+async function lookupOsm(id) {
+  const m = /^osm:(node|way|relation):(\d{1,12})$/.exec(id);
+  if (!m) return null;
+  const hit = cache.get(id);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.tags;
+  const body = `[out:json][timeout:10];${m[1]}(${m[2]});out tags;`;
+  try {
+    const r = await fetch(OVERPASS, {
+      method: 'POST',
+      headers: { 'user-agent': 'tablewise-workshop/1.0', accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const tags = (j.elements && j.elements[0] && j.elements[0].tags) || null;
+    if (tags) cache.set(id, { ts: Date.now(), tags });
+    return tags;
+  } catch (err) {
+    console.error('[bhaeha-team] overpass:', err && err.message);
+    return null;
+  }
+}
+
+function httpUrl(u) {
+  return typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null;
+}
+
+function fromOsm(id, from, to, tags) {
+  const diet = ['vegetarian', 'vegan', 'gluten_free'].filter((k) => tags['diet:' + k] && tags['diet:' + k] !== 'no');
+  return {
+    id,
+    from: iso(from),
+    to: iso(to),
+    menu_url: httpUrl(tags['website:menu'] || tags['contact:menu'] || tags['menu:url']),
+    website: httpUrl(tags.website || tags['contact:website']),
+    opening_hours: tags.opening_hours || null,
+    diet,
+    days: [],
+    offers: [],
+    source: 'osm',
+    confidence: 0.5,
+  };
+}
+
 function send(res, code, body) {
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*' });
   res.end(JSON.stringify(body));
@@ -80,7 +129,12 @@ module.exports = {
       if (!from || !to) return send(res, 400, { error: 'from and to are required, format YYYY-MM-DD' }), true;
       if (to < from) return send(res, 400, { error: 'to must not be before from' }), true;
       if ((to - from) / 86400000 + 1 > MAX_DAYS) return send(res, 400, { error: `range is limited to ${MAX_DAYS} days` }), true;
-      send(res, 200, build(id, from, to));
+      const tags = await lookupOsm(id);
+      const demo = q.get('demo') === '1';
+      if (tags && !demo) return send(res, 200, fromOsm(id, from, to, tags)), true;
+      const out = build(id, from, to);
+      if (tags) Object.assign(out, { ...fromOsm(id, from, to, tags), days: out.days, offers: out.offers, source: 'osm+mock' });
+      send(res, 200, out);
     } catch (err) {
       console.error('[bhaeha-team]', err && err.message);
       send(res, 500, { error: 'internal error' });
