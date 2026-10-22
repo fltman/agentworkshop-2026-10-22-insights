@@ -20,6 +20,7 @@
   const markers = L.layerGroup().addTo(map);
   const here = { lat: 59.3293, lng: 18.0686 };
   let current = { params: null, restaurant: null };
+  let demoMode = false;
 
   const setStatus = (t) => { $('#status').textContent = t; };
   const body = (id) => { const b = $('#' + id + ' .body'); b.replaceChildren(); return b; };
@@ -52,11 +53,14 @@
   async function search(params) {
     current.params = params;
     if (params.location) { here.lat = params.location.lat; here.lng = params.location.lng; }
+    demoMode = false;
     setStatus('Searching...');
     markers.clearLayers();
     try {
       let data;
-      try {
+      if ($('#demo').checked) {
+        data = { restaurants: demoRestaurants(), fallback: true };
+      } else try {
         data = await getJson(modules.discovery.path, {
         lat: here.lat,
         lng: here.lng,
@@ -76,19 +80,44 @@
         L.marker([r.lat, r.lng]).addTo(markers).bindTooltip(r.name).on('click', () => select(r));
       });
       renderList(list);
-      setStatus(list.length + ' restaurants found' + (data.fallback ? ' (direct OSM fallback, discovery module unavailable)' : ''));
+      setStatus(list.length + ' restaurants found' + (data.fallback ? (demoMode ? ' (DEMO DATA: discovery and OSM are both unavailable)' : ' (direct OSM fallback, discovery module unavailable)') : ''));
     } catch (e) {
       setStatus('Search failed: ' + e.message);
     }
+  }
+
+  const OVERPASS_HOSTS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+  ];
+
+  // Last resort when every OSM server is overloaded: labelled demo points around the search center.
+  function demoRestaurants() {
+    const names = [['Demo Trattoria', 'italian'], ['Demo Ramen Bar', 'japanese'], ['Demo Thai Kitchen', 'thai'], ['Demo Bistro', 'french'], ['Demo Veggie House', 'vegetarian']];
+    demoMode = true;
+    return names.map(([n, c], i) => ({
+      restaurant_id: 'demo:' + i,
+      name: n + ' (demo)',
+      lat: here.lat + 0.0025 * Math.cos(i * 1.3),
+      lng: here.lng + 0.004 * Math.sin(i * 1.3),
+      cuisines: [c],
+      contact: { phone: '+46 8 000 000' + i, website: null, opening_hours: 'Mo-Su 11:00-22:00', address: 'Demo street ' + (i + 1) },
+    }));
   }
 
   // Used only when the discovery module fails: same output shape as discovery, straight from OpenStreetMap.
   async function overpassFallback(params) {
     const radius = (params.location && params.location.radius_m) || 1500;
     const q = '[out:json][timeout:15];nwr["amenity"="restaurant"]["name"](around:' + radius + ',' + here.lat + ',' + here.lng + ');out center tags 50;';
-    const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: new URLSearchParams({ data: q }) });
-    if (!r.ok) throw new Error('OSM fallback HTTP ' + r.status);
-    const j = await r.json();
+    let j = null;
+    for (const host of OVERPASS_HOSTS) {
+      try {
+        const r = await fetch(host, { method: 'POST', body: new URLSearchParams({ data: q }), signal: AbortSignal.timeout(8000) });
+        if (r.ok) { j = await r.json(); break; }
+      } catch (e) { /* try next mirror */ }
+    }
+    if (!j) return demoRestaurants();
     const wanted = new Set(params.cuisines || []);
     return (j.elements || []).map((e) => {
       const t = e.tags || {};
@@ -126,7 +155,7 @@
     renderContact(r);
     const q = { id: r.id, restaurant_id: r.id, name: r.name, lat: r.lat, lng: r.lng };
     if (current.params) { q.from = current.params.from; q.to = current.params.to; q.maxWaitMinutes = current.params.max_wait_min; }
-    loadMenu(q); loadReviews(q); loadTiming(q);
+    loadMenu(q); loadReviews(q); loadTiming(Object.assign({ country: 'SE' }, q));
   }
 
   function renderContact(r) {

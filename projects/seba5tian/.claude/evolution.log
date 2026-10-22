@@ -1,2 +1,3 @@
 # HIVE Evolution Log
 2026-10-22 10:35 SPAWN: module-integrator (UI must track four teams' changing contracts)
+2026-10-22 11:01 SPAWN: live-prober + contract-watcher agents (we mostly wait on other teams; these probe live modules and track their contract changes)

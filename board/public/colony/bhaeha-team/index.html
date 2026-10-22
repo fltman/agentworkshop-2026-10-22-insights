@@ -24,7 +24,7 @@
 <h1>Menus + special offers</h1>
 <p class="sub">Module 3 tester. Calls /t/bhaeha-team/menu</p>
 <form id="f">
-  <label>Restaurant id<input name="id" value="osm:node:1" required></label>
+  <label>Restaurant id<input name="id" value="" required></label>
   <label>Lat<input name="lat" value="59.3293" required></label>
   <label>Lng<input name="lng" value="18.0686" required></label>
   <label>From<input name="from" type="date" required></label>
@@ -32,6 +32,13 @@
   <label>Demo data<input name="demo" type="checkbox"></label>
   <button>Fetch</button>
 </form>
+<div class="card">
+  <h2>Nearby restaurants (Stockholm, Overture Maps)</h2>
+  <button type="button" id="loc">Use my location</button>
+  <button type="button" id="near">Find nearby</button>
+  <span id="nearmsg"></span>
+  <ul id="list"></ul>
+</div>
 <div id="out"></div>
 <script>
   const f = document.getElementById('f');
@@ -53,6 +60,9 @@
     const h = el('h2', d.id);
     h.append(el('span', d.source, 'badge'), el('span', 'confidence ' + d.confidence, 'badge'));
     head.append(h);
+    if (d.name) head.append(el('div', d.name));
+    if (d.address) head.append(el('div', 'Address: ' + d.address));
+    if (d.phone) head.append(el('div', 'Phone: ' + d.phone));
     if (d.menu_url) head.append(el('div', 'Menu: ' + d.menu_url));
     if (d.website) head.append(el('div', 'Website: ' + d.website));
     if (d.opening_hours) head.append(el('div', 'Hours: ' + d.opening_hours));
@@ -80,6 +90,45 @@
     }
     if (!d.days.length && !d.offers.length) out.append(el('div', 'No menu items or offers found for this restaurant. Try demo data.'));
   }
+
+  const nearmsg = document.getElementById('nearmsg');
+  const list = document.getElementById('list');
+
+  document.getElementById('loc').addEventListener('click', () => {
+    if (!navigator.geolocation) { nearmsg.textContent = ' Geolocation not supported'; return; }
+    navigator.geolocation.getCurrentPosition(
+      (p) => { f.lat.value = p.coords.latitude.toFixed(5); f.lng.value = p.coords.longitude.toFixed(5); nearmsg.textContent = ' Location set'; },
+      () => { nearmsg.textContent = ' Location denied, type lat/lng instead'; }
+    );
+  });
+
+  document.getElementById('near').addEventListener('click', async () => {
+    const lat = Number(f.lat.value), lng = Number(f.lng.value);
+    if (!isFinite(lat) || !isFinite(lng)) { nearmsg.textContent = ' Enter valid lat/lng'; return; }
+    nearmsg.textContent = ' Searching...';
+    list.replaceChildren();
+    try {
+      const r = await fetch('/t/bhaeha-team/restaurants?' + new URLSearchParams({ lat, lng, radius_m: 800, limit: 25 }));
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'failed');
+      nearmsg.textContent = ' ' + j.restaurants.length + ' found';
+      for (const e of j.restaurants) {
+        const li = el('li');
+        const b = el('button', e.name + (e.category ? ' (' + e.category.replace(/_/g, ' ') + ')' : '') + ' ' + e.distance_m + ' m');
+        b.type = 'button';
+        b.addEventListener('click', () => {
+          f.elements.id.value = e.id;
+          f.lat.value = e.lat;
+          f.lng.value = e.lng;
+          f.requestSubmit();
+        });
+        li.append(b);
+        list.append(li);
+      }
+    } catch (err) {
+      nearmsg.textContent = ' Could not load restaurants';
+    }
+  });
 
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
