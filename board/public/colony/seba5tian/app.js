@@ -343,6 +343,31 @@
     if (!b.children.length) b.appendChild(el('div', 'No contact info', 'muted'));
   }
 
+  const GOOGLE_LABELS = {
+    rating: 'Rating', rating_count: 'Ratings', price_level: 'Price level', price_range: 'Price range', opening_hours: 'Opening hours',
+    features: 'Features', serves: 'Serves', accessibility: 'Accessibility', payment: 'Payment', parking: 'Parking', summary: 'Summary',
+  };
+  function renderGoogleDetails(b, g) {
+    if (!g || typeof g !== 'object') return;
+    const box = el('div', '', 'gdetails');
+    box.appendChild(el('strong', 'Google details'));
+    Object.entries(g).forEach(([k, v]) => {
+      if (v == null || v === '' || (Array.isArray(v) && !v.length)) return;
+      if (k === 'google_maps') {
+        if (/^https:\/\/(www\.)?(google\.[a-z.]+\/maps|maps\.google\.[a-z.]+|maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(String(v))) {
+          const a = el('a', 'Open in Google Maps'); a.href = v; a.target = '_blank'; a.rel = 'noopener'; box.appendChild(a);
+        }
+        return;
+      }
+      const text = Array.isArray(v) ? v.join(' | ') : String(v);
+      const row = el('div', '', 'grow');
+      row.appendChild(el('span', GOOGLE_LABELS[k] || k.replace(/_/g, ' '), 'glabel'));
+      row.appendChild(el('span', text));
+      box.appendChild(row);
+    });
+    if (box.children.length > 1) b.appendChild(box);
+  }
+
   async function loadMenu(q) {
     if (!modules.menus.path) return unavailable('w-menu', 'module not claimed yet');
     body('w-menu').appendChild(el('div', 'Loading...', 'muted'));
@@ -360,6 +385,7 @@
       }
       if (d.source === 'mock') b.appendChild(el('div', 'Demo data', 'muted'));
       (d.offers || []).forEach((o) => b.appendChild(el('div', 'Offer: ' + o.title + (o.description ? ' - ' + o.description : ''))));
+      renderGoogleDetails(b, d.google);
       if (!b.children.length) b.appendChild(el('div', d.empty_message || 'No menu or offers for these dates', 'muted'));
     } catch (e) { unavailable('w-menu', e.message); }
   }

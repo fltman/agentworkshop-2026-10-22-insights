@@ -32,3 +32,7 @@ iframe.embed.tall { height: 620px; }
 .cicon { flex: none; width: 20px; text-align: center; }
 .clabel { flex: none; width: 56px; font-weight: 700; }
 .cval { font-weight: 600; overflow-wrap: anywhere; }
+.gdetails { margin-top: 8px; padding: 8px; background: #f5f7fb; border-radius: 6px; font-size: 13px; }
+.gdetails a { display: block; margin-top: 4px; }
+.grow { display: flex; gap: 8px; margin-top: 3px; }
+.glabel { flex: none; width: 110px; font-weight: 700; text-transform: capitalize; }
