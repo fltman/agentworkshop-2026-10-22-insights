@@ -3,3 +3,4 @@
 2026-10-22 10:19 SPAWN: restaurant-provider-adapters (upstream restaurant API variability needs an isolated adapter boundary)
 2026-10-22 10:24 EVOLVE: restaurant-discovery and restaurant-provider-adapters remain separate (distinct public-contract and upstream-boundary responsibilities)
 2026-10-22 10:40 SPAWN: management-observability (management dashboard needs aggregate discovery-traffic metrics)
+2026-10-22 12:32 MUTATE: restaurant-provider-adapters -> resilient-restaurant-sources (provider health, caching, mirrors, and fallbacks repeatedly require one resilience boundary)

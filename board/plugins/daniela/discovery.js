@@ -6,6 +6,7 @@ const DEFAULT_PROVIDERS = [
   'https://overpass.private.coffee/api/interpreter',
 ];
 const cache = new Map();
+const GOOGLE_PLACES_URL = 'https://places.googleapis.com/v1/places:searchNearby';
 
 function numberParameter(value, name, minimum, maximum, fallback) {
   if (value === null) {
@@ -82,8 +83,89 @@ function normalize(element) {
   };
 }
 
+function normalizeGooglePlace(place) {
+  const lat = place.location?.latitude;
+  const lng = place.location?.longitude;
+  if (!place.id || !place.displayName?.text || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  const cuisines = (place.types || [])
+    .filter((type) => type.endsWith('_restaurant'))
+    .map((type) => type.replace(/_restaurant$/, '').replace(/_/g, ' '));
+  const priceLevels = {
+    PRICE_LEVEL_INEXPENSIVE: 1,
+    PRICE_LEVEL_MODERATE: 2,
+    PRICE_LEVEL_EXPENSIVE: 3,
+    PRICE_LEVEL_VERY_EXPENSIVE: 4,
+  };
+  return {
+    restaurant_id: `google:${place.id}`,
+    name: place.displayName.text,
+    lat,
+    lng,
+    cuisines,
+    price_level: priceLevels[place.priceLevel] || null,
+    address: place.formattedAddress || null,
+    phone: place.nationalPhoneNumber || null,
+    website: place.websiteUri || null,
+    openingHours: place.regularOpeningHours?.weekdayDescriptions?.join('; ') || null,
+    source: 'google-places',
+  };
+}
+
 function providers() {
   return process.env.OVERPASS_URL ? process.env.OVERPASS_URL.split(',') : DEFAULT_PROVIDERS;
+}
+
+function googleApiKey() {
+  return process.env.GOOGLE_MAPS_API || process.env.GOOGLE_PLACES_API_KEY || null;
+}
+
+function filterRestaurants(restaurants, search) {
+  const cuisineSet = new Set(search.cuisines);
+  return restaurants
+    .filter(Boolean)
+    .filter((restaurant) => !cuisineSet.size || restaurant.cuisines.some((cuisine) => cuisineSet.has(cuisine.toLowerCase())))
+    .filter((restaurant) => search.priceMin === null || restaurant.price_level === null || restaurant.price_level >= search.priceMin)
+    .filter((restaurant) => search.priceMax === null || restaurant.price_level === null || restaurant.price_level <= search.priceMax)
+    .slice(0, search.limit);
+}
+
+async function fetchGoogleRestaurants(search, apiKey) {
+  const response = await fetch(process.env.GOOGLE_PLACES_URL || GOOGLE_PLACES_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-goog-api-key': apiKey,
+      'x-goog-fieldmask': [
+        'places.id',
+        'places.displayName',
+        'places.location',
+        'places.types',
+        'places.formattedAddress',
+        'places.nationalPhoneNumber',
+        'places.websiteUri',
+        'places.regularOpeningHours',
+        'places.priceLevel',
+      ].join(','),
+    },
+    body: JSON.stringify({
+      includedTypes: ['restaurant'],
+      maxResultCount: Math.min(search.limit, 20),
+      locationRestriction: {
+        circle: {
+          center: { latitude: search.lat, longitude: search.lng },
+          radius: search.radiusMeters,
+        },
+      },
+    }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(`Google Places returned ${response.status}`);
+  }
+  return response.json();
 }
 
 async function fetchRestaurants(provider, search) {
@@ -111,17 +193,22 @@ async function searchRestaurants(search) {
   }
 
   let lastError;
+  const apiKey = googleApiKey();
+  if (apiKey) {
+    try {
+      const payload = await fetchGoogleRestaurants(search, apiKey);
+      const restaurants = filterRestaurants((payload.places || []).map(normalizeGooglePlace), search);
+      cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, restaurants });
+      return { restaurants, cacheHit: false };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
   for (const provider of providers()) {
     try {
       const payload = await fetchRestaurants(provider, search);
-      const cuisineSet = new Set(search.cuisines);
-      const restaurants = (payload.elements || [])
-        .map(normalize)
-        .filter(Boolean)
-        .filter((restaurant) => !cuisineSet.size || restaurant.cuisines.some((cuisine) => cuisineSet.has(cuisine.toLowerCase())))
-        .filter((restaurant) => search.priceMin === null || restaurant.price_level === null || restaurant.price_level >= search.priceMin)
-        .filter((restaurant) => search.priceMax === null || restaurant.price_level === null || restaurant.price_level <= search.priceMax)
-        .slice(0, search.limit);
+      const restaurants = filterRestaurants((payload.elements || []).map(normalize), search);
       cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, restaurants });
       return { restaurants, cacheHit: false };
     } catch (error) {
