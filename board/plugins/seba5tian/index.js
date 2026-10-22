@@ -1,7 +1,7 @@
 // seba5tian: TableWise integration backend. The UI talks to the other teams' modules directly (same origin);
 // this plugin offers a health check, the module registry and a Google Places search proxy (key stays server-side).
 
-const { handlePlaces } = require('./places');
+const { handlePlaces, handleReviews } = require('./places');
 
 const MODULES = {
   discovery: { team: 'daniela', path: '/t/daniela/search' },
@@ -27,6 +27,10 @@ module.exports = {
     }
     if (req.method === 'GET' && path === '/places') {
       await handlePlaces(req, res, json);
+      return true;
+    }
+    if (req.method === 'GET' && path === '/google-reviews') {
+      await handleReviews(req, res, json);
       return true;
     }
     return false;

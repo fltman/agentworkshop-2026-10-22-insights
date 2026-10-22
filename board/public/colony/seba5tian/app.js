@@ -367,8 +367,24 @@
     } catch (e) { unavailable('w-menu', e.message); }
   }
 
-  function loadReviews(q) {
+  // Google places: hand their reviews to gnik's ingestion first so the embedded analysis has real text.
+  async function ingestGoogleReviews(q, b) {
+    try {
+      const g = await getJson('/t/seba5tian/google-reviews', { id: q.id });
+      if (g.rating != null) b.appendChild(el('div', 'Google rating: ' + g.rating + (g.user_rating_count ? ' (' + g.user_rating_count + ' ratings)' : ''), 'muted'));
+      const texts = (g.reviews || []).map((x) => x.text);
+      if (texts.length) {
+        await fetch('/t/gnik/reviews?id=' + encodeURIComponent(q.id), {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ reviews: texts }), signal: AbortSignal.timeout(6000),
+        });
+      }
+    } catch (e) { /* not configured or unavailable: gnik falls back to its own sources */ }
+  }
+
+  async function loadReviews(q) {
     const b = body('w-reviews');
+    if (String(q.id).startsWith('google:')) await ingestGoogleReviews(q, b);
     if (!/^[A-Za-z0-9:_\/.-]+$/.test(String(q.id))) { b.appendChild(el('div', 'No reviews found', 'muted')); return; }
     const f = document.createElement('iframe');
     f.src = '/colony/gnik/?id=' + encodeURIComponent(q.id) + '&name=' + encodeURIComponent(q.name || '');
