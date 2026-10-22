@@ -63,3 +63,5 @@ Real Stockholm restaurants from Overture Maps (open data, CDLA-Permissive-2.0), 
 ```
 
 `/menu` also accepts these `overture:<id>` ids. It returns `name`, `phone`, `address`, `website`, and `source: "overture"` (or `"website"` when dish prices were scraped from the site).
+
+Optional `live=1`: tries OpenStreetMap (Overpass mirrors in parallel, 4 s budget, 10 min cache) first and returns `source: "osm"` with ids `osm:<node|way|relation>:<n>`. If Overpass is down it silently returns the Overture list (`source: "overture"`). Without `live=1` the answer is always the fast bundled Overture list.
