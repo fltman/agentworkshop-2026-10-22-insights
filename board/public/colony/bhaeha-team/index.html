@@ -29,7 +29,6 @@
   <label>Lng<input name="lng" value="18.0686" required></label>
   <label>From<input name="from" type="date" required></label>
   <label>To<input name="to" type="date" required></label>
-  <label>Demo data<input name="demo" type="checkbox"></label>
   <button>Fetch</button>
 </form>
 <div class="card">
@@ -88,7 +87,7 @@
       c.append(ul);
       out.append(c);
     }
-    if (!d.days.length && !d.offers.length) out.append(el('div', 'No menu items or offers found for this restaurant. Try demo data.'));
+    if (!d.days.length && !d.offers.length) out.append(el('div', 'No menu items or offers found for this restaurant. The restaurant website may not publish a menu we can read.'));
   }
 
   const nearmsg = document.getElementById('nearmsg');
@@ -97,8 +96,9 @@
   document.getElementById('loc').addEventListener('click', () => {
     if (!navigator.geolocation) { nearmsg.textContent = ' Geolocation not supported'; return; }
     navigator.geolocation.getCurrentPosition(
-      (p) => { f.lat.value = p.coords.latitude.toFixed(5); f.lng.value = p.coords.longitude.toFixed(5); nearmsg.textContent = ' Location set'; },
-      () => { nearmsg.textContent = ' Location denied, type lat/lng instead'; }
+      (p) => { f.lat.value = p.coords.latitude.toFixed(5); f.lng.value = p.coords.longitude.toFixed(5); nearmsg.textContent = ' Location set'; findNearby(); },
+      () => { nearmsg.textContent = ' Location denied, type lat/lng instead'; },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   });
 
@@ -136,7 +136,6 @@
     e.preventDefault();
     out.replaceChildren(el('div', 'Loading...'));
     const q = new URLSearchParams({ id: f.elements.id.value, lat: f.lat.value, lng: f.lng.value, from: f.from.value, to: f.to.value });
-    if (f.demo.checked) q.set('demo', '1');
     try {
       const r = await fetch('/t/bhaeha-team/menu?' + q);
       const d = await r.json();
