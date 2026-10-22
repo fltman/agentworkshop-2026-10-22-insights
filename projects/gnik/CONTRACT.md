@@ -17,7 +17,7 @@ Response 200:
     { "dish": "carbonara", "mentions": 9, "sentiment": 0.82 }
   ],
   "red_flags": [
-    { "type": "wait_time|cleanliness|dish_warning|service|price",
+    { "type": "wait_time|cleanliness|dish_warning|service|price|food_safety",
       "text": "Long waits reported on weekends",
       "severity": "low|medium|high",
       "evidence_count": 5,
