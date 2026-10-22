@@ -30,3 +30,4 @@ iframe.embed { width: 100%; height: 460px; border: 1px solid #eee; margin-top: 6
 .dot.red { background: #e53935; }
 #list .item.bad { background: #fde2e1; color: #8e1b1b; }
 .leaflet-tooltip { white-space: pre-line; max-width: 280px; }
+iframe.embed.tall { height: 620px; }

@@ -392,34 +392,17 @@
     b.appendChild(f);
   }
 
-  async function loadTiming(q) {
-    body('w-timing').appendChild(el('div', 'Loading...', 'muted'));
-    try {
-      const d = await getJson(modules.timing.path, q);
-      const b = body('w-timing');
-      if (d.requested && d.requested.verdict) {
-        const r = d.requested;
-        b.appendChild(el('div', 'At ' + r.time + ': ' + r.verdict + (r.est_wait_minutes != null ? ' (~' + r.est_wait_minutes + ' min wait)' : '') + (r.better_time ? ', better at ' + r.better_time : ''), r.verdict === 'good' ? 'ok' : 'flag'));
-      }
-      if (d.avg_wait_min != null) b.appendChild(el('div', 'Average wait: ' + d.avg_wait_min + ' min'));
-      const ul = el('ul');
-      if (!(d.best_times || []).length && (d.days || []).length) {
-        d.days.forEach((day) => {
-          const open = (day.hours || []).filter((h) => h.open !== false && h.crowd != null);
-          if (!open.length) return;
-          const best = open.reduce((a, h) => (h.crowd < a.crowd ? h : a));
-          ul.appendChild(el('li', day.date + ' around ' + best.hour + ':00 (' + (best.level || best.crowd) + ' crowd, ~' + best.est_wait_minutes + ' min wait)'));
-        });
-      }
-      (d.best_times || []).forEach((t) => {
-        ul.appendChild(el('li', [t.date, t.start && t.end ? t.start + '-' + t.end : t.hour, t.crowd ? '(' + t.crowd + ' crowd)' : '', t.est_wait_min != null ? '~' + t.est_wait_min + ' min wait' : ''].filter(Boolean).join(' ')));
-      });
-      b.appendChild(ul);
-      const wet = [];
-      (d.days || []).forEach((day) => (day.hours || []).forEach((h) => { if (h.rain_pct != null && h.rain_pct >= 60 && h.hour >= 8) wet.push(day.date + ' ' + String(h.hour).padStart(2, '0') + ':00'); }));
-      if (wet.length) b.appendChild(el('div', 'Rain likely: ' + wet.slice(0, 4).join(', ') + (wet.length > 4 ? ' ...' : ''), 'muted'));
-      if (!ul.children.length) b.appendChild(el('div', 'No timing data', 'muted'));
-    } catch (e) { unavailable('w-timing', e.message); }
+  function loadTiming(q) {
+    const b = body('w-timing');
+    if (!/^[A-Za-z0-9:_\/.-]+$/.test(String(q.id))) { b.appendChild(el('div', 'No timing data', 'muted')); return; }
+    const p = new URLSearchParams({ id: q.id, name: q.name || '' });
+    ['lat', 'lng', 'from', 'to', 'time'].forEach((k) => { if (q[k] != null && q[k] !== '') p.set(k, q[k]); });
+    if (q.maxWaitMinutes) p.set('max_wait_min', q.maxWaitMinutes);
+    const f = document.createElement('iframe');
+    f.src = '/colony/omidteam/?' + p;
+    f.className = 'embed tall';
+    f.title = 'Best time to visit';
+    b.appendChild(f);
   }
 
   $('#form').addEventListener('submit', (ev) => {
