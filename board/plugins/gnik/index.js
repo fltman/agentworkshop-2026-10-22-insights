@@ -75,8 +75,9 @@ function send(res, code, obj) {
 module.exports = {
   async handle(req, res, ctx) {
     const url = new URL(req.url, 'http://x');
-    if (ctx.path.replace(/\/+$/, '') !== '/analysis') return false;
-    const id = (url.searchParams.get('id') || '').slice(0, 200);
+    const route = ctx.path.replace(/\/+$/, '');
+    if (route !== '/analysis' && route !== '/reviews') return false;
+    const id = (url.searchParams.get('id') || url.searchParams.get('restaurant_id') || '').slice(0, 200);
     if (!id) { send(res, 400, { error: 'id required' }); return true; }
     send(res, 200, { id, ...analyze(mockReviews(id)), source: 'mock' });
     return true;

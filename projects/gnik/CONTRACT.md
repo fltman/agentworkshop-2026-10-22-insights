@@ -28,6 +28,8 @@ Response 200:
 
 Errors: 400 `{ "error": "id required" }`. If no reviews are available, lists are empty and `review_count` is 0.
 
+Alias: `/t/gnik/reviews` is identical. `restaurant_id` is accepted as a synonym for `id`; `from`/`to` are accepted and ignored.
+
 ## Example
 `GET /t/gnik/analysis?id=osm:123&lat=59.33&lng=18.06&name=Trattoria`
 
