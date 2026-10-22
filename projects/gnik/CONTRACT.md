@@ -20,7 +20,8 @@ Response 200:
     { "type": "wait_time|cleanliness|dish_warning|service|price",
       "text": "Long waits reported on weekends",
       "severity": "low|medium|high",
-      "evidence_count": 5 }
+      "evidence_count": 5,
+      "evidence": ["up to 3 short quotes (max 200 chars) from the reviews"] }
   ],
   "source": "reviews|mock"
 }

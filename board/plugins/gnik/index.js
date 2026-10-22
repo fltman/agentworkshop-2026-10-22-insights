@@ -38,15 +38,17 @@ function analyze(reviews) {
     const text = String(r).slice(0, 1000);
     for (const d of DISHES) {
       if (text.toLowerCase().includes(d)) {
-        const e = dishes[d] || (dishes[d] = { dish: d, mentions: 0, score: 0 });
+        const e = dishes[d] || (dishes[d] = { dish: d, mentions: 0, score: 0, neg: [] });
         e.mentions++;
         e.score += NEG.test(text) ? -1 : POS.test(text) ? 1 : 0;
+        if (NEG.test(text) && e.neg.length < 3) e.neg.push(text.slice(0, 200));
       }
     }
     for (const f of FLAGS) {
       if (f.re.test(text)) {
-        const e = flags[f.type] || (flags[f.type] = { type: f.type, text: f.text, evidence_count: 0 });
+        const e = flags[f.type] || (flags[f.type] = { type: f.type, text: f.text, evidence_count: 0, evidence: [] });
         e.evidence_count++;
+        if (e.evidence.length < 3) e.evidence.push(text.slice(0, 200));
       }
     }
   }
@@ -61,7 +63,7 @@ function analyze(reviews) {
   }));
   for (const e of Object.values(dishes)) {
     if (e.mentions >= 2 && e.score < 0) {
-      red_flags.push({ type: 'dish_warning', text: `Reviewers advise against the ${e.dish}`, severity: 'medium', evidence_count: e.mentions });
+      red_flags.push({ type: 'dish_warning', text: `Reviewers advise against the ${e.dish}`, severity: 'medium', evidence_count: e.mentions, evidence: e.neg });
     }
   }
   return { review_count: reviews.length, suggested_meals, red_flags };
