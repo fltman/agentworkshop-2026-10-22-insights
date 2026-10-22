@@ -181,7 +181,17 @@ function compute(q, tags, wx, hol) {
       crowd: Math.round(t.reduce((a, x) => a + x.crowd, 0) / t.length), est_wait_min: Math.round(waits.reduce((a, x) => a + x, 0) / waits.length) };
   });
   const avg_wait_min = flat.length ? Math.round(flat.reduce((a, x) => a + x.est_wait_min, 0) / flat.length) : null;
-  return { restaurant_id: id, lat, lng, best_times: flat, avg_wait_min, source: ['osm', wx && 'weather', hol && 'holidays'].filter(x => x !== null && x !== false && x !== undefined && (x === 'osm' ? tags : x)).concat('heuristic-model').join('+'), days: out };
+  let requested = null;
+  const tm = /^(\d{1,2}):(\d{2})$/.exec(q.time || '');
+  if (tm && out.length) {
+    const hr = +tm[1], h = out[0].hours.find(x => x.hour === hr);
+    if (h) {
+      const alt = out[0].best_times[0];
+      requested = { date: out[0].date, time: String(hr).padStart(2, '0') + ':' + tm[2], crowd: h.crowd, level: h.level, est_wait_minutes: h.est_wait_minutes, open: h.open,
+        verdict: !h.open ? 'closed' : h.est_wait_minutes <= maxWait ? 'good' : 'busy', better_time: h.est_wait_minutes > maxWait || !h.open ? (alt ? alt.time : null) : null };
+    }
+  }
+  return { restaurant_id: id, lat, lng, requested, best_times: flat, avg_wait_min, source: ['osm', wx && 'weather', hol && 'holidays'].filter(x => x !== null && x !== false && x !== undefined && (x === 'osm' ? tags : x)).concat('heuristic-model').join('+'), days: out };
 }
 
 function send(res, code, obj) {
