@@ -1,13 +1,19 @@
 // gnik: review analysis (suggested meals + red-flag outliers). See projects/gnik/CONTRACT.md
-const DISHES = ['carbonara', 'margherita pizza', 'tiramisu', 'ramen', 'pad thai', 'burger', 'risotto', 'caesar salad', 'fish and chips', 'lasagna'];
+// The first 10 dishes are also used by the demo generator
+const DISHES = ['carbonara', 'margherita pizza', 'tiramisu', 'ramen', 'pad thai', 'burger', 'risotto', 'caesar salad', 'fish and chips', 'lasagna',
+  'pizza', 'pasta', 'sushi', 'steak', 'taco', 'curry', 'falafel', 'kebab', 'schnitzel', 'salmon', 'ceviche', 'paella', 'pho', 'dumplings', 'gnocchi', 'bruschetta',
+  'meatballs', 'k\u00F6ttbullar', 'raggmunk', 'pyttipanna', 'sill', 'r\u00E4ksm\u00F6rg\u00E5s', 'toast skagen', 'laxsoppa', 'fiskgryta', 'dagens', 'hamburgare', 'pannkakor', 'wallenbergare', 'biff', 'lax'];
 const FLAGS = [
-  { type: 'wait_time', re: /(long|huge) (wait|queue|line)|slow service|hour for/i, text: 'Long waits reported' },
-  { type: 'cleanliness', re: /dirty|unclean|filthy|sticky tables?|cockroach/i, text: 'Cleanliness complaints' },
-  { type: 'service', re: /rude|ignored us|unfriendly|wrong order/i, text: 'Service complaints' },
-  { type: 'price', re: /overpriced|rip.?off|too expensive/i, text: 'Perceived as overpriced' },
+  { type: 'wait_time', re: /(long|huge|endless) (wait|queue|line)|slow service|hour for|waited (over |more than )?\d+ ?(min|hour)|l\u00E5ng v\u00E4ntetid|v\u00E4ntade (i )?(en )?(timme|l\u00E4nge)|l\u00E5ngsam|k\u00F6ade|lång kö|lång väntan/i, text: 'Long waits reported' },
+  { type: 'cleanliness', re: /dirty|unclean|filthy|sticky tables?|cockroach|smelled|sm\u00E5tt|smutsig|skitig|\u00E4cklig|kackerlack|lortig|ostädat|ostädad/i, text: 'Cleanliness complaints' },
+  { type: 'service', re: /rude|ignored us|unfriendly|wrong order|inattentive|otrevlig|ohyfsad|oh\u00F6flig|ignorerade|fel best\u00E4llning|d\u00E5lig service|dålig service/i, text: 'Service complaints' },
+  { type: 'price', re: /overpriced|rip.?off|too expensive|not worth the (price|money)|\u00F6verpriset|\u00F6verpris|f\u00F6r dyrt|dyrt f\u00F6r|inte v\u00E4rt/i, text: 'Perceived as overpriced' },
+  { type: 'food_safety', re: /food poisoning|got sick|stomach ache|matf\u00F6rgiftning|blev sjuk|magont/i, text: 'Food safety concerns' },
 ];
-const POS = /(great|amazing|delicious|best|love|perfect|fresh|excellent)/i;
-const NEG = /(bad|bland|cold|awful|terrible|worst|disappoint|overcooked|undercooked)/i;
+const POS = /(great|amazing|delicious|best|love[d]?|perfect|fresh|excellent|tasty|g\u00F6tt|gott|utm\u00E4rkt|fantastisk|b\u00E4st|toppen|favorit|perfekt|underbar|nyttlagad|jättegod|jättegott)/i;
+const NEG = /(bad|bland|cold|awful|terrible|worst|disappoint|overcooked|undercooked|dry|greasy|d\u00E5lig|tr\u00E5kig|smaklös|kall|torr|besviken|seg|fet|vidrig|äcklig)/i;
+// Drops "not dirty", "inte gott" style phrases so negated words do not count
+const negated = (t) => t.replace(/\b(not|never|no|n't|inte|aldrig|ingen|inget|utan)\s+(?:very\s+|so\s+|too\s+|s\u00E4rskilt\s+|speciellt\s+)?[\p{L}]+/giu, ' ');
 
 function hash(s) {
   let h = 2166136261;
@@ -19,7 +25,7 @@ function hash(s) {
 function mockReviews(id) {
   let h = hash(id);
   const rnd = () => { h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0; return h / 4294967296; };
-  const dishes = [0, 1, 2].map(() => DISHES[Math.floor(rnd() * DISHES.length)]);
+  const dishes = [0, 1, 2].map(() => DISHES[Math.floor(rnd() * 10)]);
   const out = [];
   const n = 12 + Math.floor(rnd() * 20);
   for (let i = 0; i < n; i++) {
@@ -36,16 +42,17 @@ function analyze(reviews) {
   const flags = {};
   for (const r of reviews) {
     const text = String(r).slice(0, 1000);
+    const clean = negated(text);
     for (const d of DISHES) {
       if (text.toLowerCase().includes(d)) {
         const e = dishes[d] || (dishes[d] = { dish: d, mentions: 0, score: 0, neg: [] });
         e.mentions++;
-        e.score += NEG.test(text) ? -1 : POS.test(text) ? 1 : 0;
-        if (NEG.test(text) && e.neg.length < 3) e.neg.push(text.slice(0, 200));
+        e.score += NEG.test(clean) ? -1 : POS.test(clean) ? 1 : 0;
+        if (NEG.test(clean) && e.neg.length < 3) e.neg.push(text.slice(0, 200));
       }
     }
     for (const f of FLAGS) {
-      if (f.re.test(text)) {
+      if (f.re.test(clean)) {
         const e = flags[f.type] || (flags[f.type] = { type: f.type, text: f.text, evidence_count: 0, evidence: [] });
         e.evidence_count++;
         if (e.evidence.length < 3) e.evidence.push(text.slice(0, 200));
