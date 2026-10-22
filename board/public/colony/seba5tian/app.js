@@ -58,7 +58,9 @@
     markers.clearLayers();
     try {
       let data;
-      try {
+      if ($('#demo').checked) {
+        data = { restaurants: demoRestaurants(), fallback: true };
+      } else try {
         data = await getJson(modules.discovery.path, {
         lat: here.lat,
         lng: here.lng,
