@@ -20,11 +20,11 @@
       <label>Price <select name="price_max"><option value="4">any</option><option value="1">$</option><option value="2">up to $$</option><option value="3">up to $$$</option></select></label>
       <label>Max wait (min) <input type="number" name="max_wait_min" value="20" min="0"></label>
       <label>Radius (m) <input type="number" name="radius_m" value="1500" min="100" max="5000"></label>
-      <label><span>Demo data</span><input type="checkbox" id="demo"></label>
       <button type="button" id="locate">Use my location</button>
       <button type="submit">Search</button>
     </form>
     <div id="status"></div>
+    <div id="legend" class="muted"><span class="dot blue"></span> fits your search &nbsp; <span class="dot red"></span> closed at the chosen time or expected wait above your maximum (hover the pin or list item for the reason). Wait is checked for the first 25 results.</div>
   </section>
   <section id="mapcard" class="card"><div id="map"></div><div id="list"></div></section>
   <aside id="details" class="card">

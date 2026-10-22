@@ -14,6 +14,7 @@ input,select,button{font:inherit;padding:6px 8px;border:1px solid var(--line);bo
 button.go-btn{background:var(--acc);color:#fff;border-color:var(--acc);cursor:pointer;align-self:flex-end;font-weight:600}
 .hero{display:flex;gap:12px;flex-wrap:wrap}
 .tile{flex:1 1 200px;border-radius:12px;padding:12px 14px;border:1px solid var(--line)}
+.chip{margin-left:auto;font-size:11px;font-weight:600;color:#1b7a6e;background:#e8f6f3;border:1px solid #bfe5df;border-radius:999px;padding:2px 10px;animation:pop .4s both;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tile small{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
 .tile b{display:block;font-size:22px;margin:2px 0}
 .tile span{color:var(--mut);font-size:12px}
@@ -46,9 +47,33 @@ button.go-btn{background:var(--acc);color:#fff;border-color:var(--acc);cursor:po
 .heat{display:grid;gap:3px;margin-top:4px}
 .heat .row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut)}.heat .row em{width:80px;font-style:normal}
 .heat .cells{display:flex;gap:2px;flex:1}.heat .cells b{flex:1;height:12px;border-radius:3px;display:block}
+
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(179,48,31,.5)}100%{box-shadow:0 0 0 9px rgba(179,48,31,0)}}
+@keyframes glow{0%,100%{outline-color:rgba(27,122,110,.35)}50%{outline-color:#1b7a6e}}
+@keyframes bob{0%,100%{transform:translateX(-50%)}50%{transform:translateX(-50%) translateY(-3px)}}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:.9}}
+@keyframes sheen{from{background-position:-200px 0}to{background-position:200px 0}}
+@keyframes fadecell{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:none}}
+#out:not(.still) .card{animation:rise .5s cubic-bezier(.2,.8,.2,1) both}
+#out:not(.still) .card:nth-child(2){animation-delay:.12s}
+#out:not(.still) .card:nth-child(3){animation-delay:.24s}
+.hero .tile{animation:pop .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*110ms + 120ms);transition:transform .2s,box-shadow .2s}
+.hero .tile:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0,.1)}
+.bar{transform-origin:bottom;animation:grow .7s cubic-bezier(.2,.9,.3,1.1) both;animation-delay:calc(var(--i,0)*30ms + 150ms)}
+.col:hover .bar{transform:scaleY(1.04);filter:brightness(1.12)}
+.col.best .bar{animation:grow .7s cubic-bezier(.2,.9,.3,1.1) both,glow 2s ease-in-out 1s infinite;animation-delay:calc(var(--i,0)*30ms + 150ms),0s}
+.col.me::after{animation:bob 1.6s ease-in-out infinite}
+.col.now::before{animation:blink 1.6s ease-in-out infinite}
+h1 i{animation:pulse 1.8s ease-out infinite}
+.heat .cells b{animation:fadecell .35s ease both;animation-delay:calc(var(--i,0)*14ms + var(--r,0)*60ms)}
+.skel{height:14px;border-radius:7px;margin:10px 0;background:linear-gradient(90deg,#eee 25%,#f8f8f6 37%,#eee 63%);background-size:400px 100%;animation:sheen 1.1s linear infinite}
+@media (prefers-reduced-motion:reduce){html:not(.force) *,html:not(.force) *::before,html:not(.force) *::after{animation:none!important;transition:none!important}}
 </style></head><body>
 <div class="card">
-<h1><i></i>Best time to visit</h1>
+<h1><i></i>Best time to visit<span id="chip" class="chip" hidden></span></h1>
 <form id="f">
  <label>Nearby restaurants<select id="demo"></select></label>
  <button type="button" id="loc" class="go-btn" style="background:#fff;color:var(--acc)">Use my location</button>
@@ -85,13 +110,22 @@ async function tryGet(url) {
   if (!r.ok || !l.length) throw new Error('empty');
   return l;
 }
+async function tryPhoton() {
+  const r = await fetch('https://photon.komoot.io/api/?q=restaurant&osm_tag=amenity:restaurant&lat=' + place.lat + '&lon=' + place.lng + '&limit=30', { signal: AbortSignal.timeout(9000) });
+  const j = await r.json(), t = { N: 'node', W: 'way', R: 'relation' };
+  const l = ((j && j.features) || []).map(x => { const p = x.properties || {}, c = (x.geometry || {}).coordinates || []; return { id: t[p.osm_type] && p.osm_id ? 'osm:' + t[p.osm_type] + '/' + p.osm_id : null, name: p.name, lat: num(c[1]), lng: num(c[0]) }; }).filter(x => x.id && x.name);
+  if (!l.length) throw new Error('empty');
+  return l;
+}
 async function loadNearby() {
   demo.textContent = ''; demo.appendChild(new Option('Loading restaurants...', ''));
   const q = 'lat=' + place.lat + '&lng=' + place.lng + '&radius_m=1000';
   try {
     list = await Promise.any([tryGet('/t/daniela/search?' + q + '&limit=30'), tryGet('/t/bhaeha-team/restaurants?' + q)]);
   } catch (e) {
-    list = [];
+    try { list = await tryPhoton(); } catch (e2) { list = []; }
+  }
+  if (!list.length) {
     demo.textContent = ''; demo.appendChild(new Option('No restaurants yet, retrying...', ''));
     setTimeout(loadNearby, 5000); return;
   }
@@ -102,7 +136,7 @@ async function loadNearby() {
 }
 demo.addEventListener('change', () => {
   const r = list[+demo.value]; if (!r) return;
-  f.elements.id.value = r.id; f.elements.lat.value = r.lat != null ? r.lat : ''; f.elements.lng.value = r.lng != null ? r.lng : ''; run();
+  curName = r.name; chip.hidden = true; f.elements.id.value = r.id; f.elements.lat.value = r.lat != null ? r.lat : ''; f.elements.lng.value = r.lng != null ? r.lng : ''; run();
 });
 document.getElementById('loc').addEventListener('click', () => {
   if (!navigator.geolocation) return;
@@ -113,33 +147,61 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
 const pad = n => String(n).padStart(2, '0');
 const win = t => t.length ? t[0].time + '-' + pad(+t[t.length - 1].time.slice(0, 2) + 1) + ':00' : null;
 const dayName = s => new Date(s + 'T12:00:00Z').toLocaleDateString('en', { weekday: 'short', day: 'numeric', month: 'short' });
-let data = null, sel = 0;
+let data = null, sel = 0, curName = '';
+const chip = document.getElementById('chip');
+const force = new URLSearchParams(location.search).get('motion') === '1';
+if (force) document.documentElement.classList.add('force');
+const calm = !force && window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function tile(cls, small, big, sub) {
-  const t = el('div', 'tile ' + cls); t.appendChild(el('small', '', small)); t.appendChild(el('b', '', big)); t.appendChild(el('span', '', sub)); return t;
+function countUp(node, to, fmt) {
+  if (calm || !window.requestAnimationFrame) { node.textContent = fmt(to); return; }
+  const t0 = performance.now();
+  const step = t => { const k = Math.min(1, (t - t0) / 900); node.textContent = fmt(Math.round(to * (1 - Math.pow(1 - k, 3)))); if (k < 1) requestAnimationFrame(step); };
+  node.textContent = fmt(0); requestAnimationFrame(step);
+}
+function tile(cls, small, big, sub, n) {
+  const t = el('div', 'tile ' + cls), sp = el('span', '', sub); t.appendChild(el('small', '', small)); t.appendChild(el('b', '', big)); t.appendChild(sp);
+  if (n && sub.includes('{n}')) countUp(sp, n, v => sub.replace('{n}', v));
+  else sp.textContent = sub.replace('{n}', n);
+  return t;
+}
+function startsIn(date, time) {
+  const ms = new Date(date + 'T' + time + ':00') - Date.now();
+  if (!(ms > 0) || ms > 36e5 * 48) return '';
+  const m = Math.round(ms / 6e4), h = Math.floor(m / 60);
+  return ' · starts in ' + (h ? h + 'h ' : '') + (m % 60) + 'm';
 }
 
-function render() {
-  out.textContent = '';
+function heroAdd(h, t) { t.style.setProperty('--i', h.children.length); h.appendChild(t); }
+function render(again) {
+  out.textContent = ''; out.classList.toggle('still', !!again);
   const j = data, card = el('div', 'card');
   const slots = j.days.filter(d => d.best_times.length);
   const hero = el('div', 'hero');
   if (slots.length) {
     const b = slots.slice().sort((a, c) => a.best_times[0].est_wait_minutes - c.best_times[0].est_wait_minutes || a.date.localeCompare(c.date))[0];
-    hero.appendChild(tile('go', 'Go', win(b.best_times), dayName(b.date) + ', about ' + b.best_times[0].est_wait_minutes + ' min wait'));
-  } else hero.appendChild(tile('avoid', 'No open slot', 'Closed', 'Try other dates or meal'));
+    heroAdd(hero, tile('go', 'Go', win(b.best_times), dayName(b.date) + ', about {n} min wait' + startsIn(b.date, b.best_times[0].time), b.best_times[0].est_wait_minutes));
+  } else heroAdd(hero, tile('avoid', 'No open slot', 'Closed', 'Try other dates or meal'));
   const worst = j.days.slice().sort((a, c) => c.busiest.crowd - a.busiest.crowd)[0];
-  if (worst && worst.busiest.crowd >= 55) hero.appendChild(tile('avoid', 'Avoid', worst.busiest.time, dayName(worst.date) + ', ' + worst.busiest.crowd + '% crowded'));
+  if (worst && worst.busiest.crowd >= 55) heroAdd(hero, tile('avoid', 'Avoid', worst.busiest.time, dayName(worst.date) + ', {n}% crowded', worst.busiest.crowd));
   if (j.requested) {
     const r = j.requested, label = { good: 'Good choice', busy: 'Busy then', closed: 'Closed then' }[r.verdict];
-    hero.appendChild(tile('you ' + r.verdict, 'Your time ' + r.time, label, r.verdict === 'good' ? 'about ' + r.est_wait_minutes + ' min wait' : (r.better_time ? 'try ' + r.better_time + ' instead' : 'no better slot')));
+    heroAdd(hero, tile('you ' + r.verdict, 'Your time ' + r.time, label, r.verdict === 'good' ? 'about ' + r.est_wait_minutes + ' min wait' : (r.better_time ? 'try ' + r.better_time + ' instead' : 'no better slot')));
   }
-  card.appendChild(hero); out.appendChild(card);
+  card.appendChild(hero);
+  if (slots.length) {
+    const b0 = slots.slice().sort((a, c) => a.best_times[0].est_wait_minutes - c.best_times[0].est_wait_minutes || a.date.localeCompare(c.date))[0];
+    const btn = el('button', 'tab copy', 'Copy plan'); btn.type = 'button';
+    const plan = (curName || f.elements.id.value) + ': go ' + dayName(b0.date) + ' ' + win(b0.best_times) + ', about ' + b0.best_times[0].est_wait_minutes + ' min wait';
+    btn.onclick = async () => { try { await navigator.clipboard.writeText(plan); btn.textContent = 'Copied!'; } catch (e) { btn.textContent = plan; } setTimeout(() => { btn.textContent = 'Copy plan'; }, 2000); };
+    const row = el('div', 'tabs'); row.style.marginTop = '10px'; row.appendChild(btn); card.appendChild(row);
+  }
+  out.appendChild(card);
 
   const c2 = el('div', 'card');
   if (j.days.length > 1) {
     const tabs = el('div', 'tabs');
-    j.days.forEach((d, i) => { const t = el('button', 'tab' + (i === sel ? ' on' : ''), dayName(d.date)); t.type = 'button'; t.onclick = () => { sel = i; render(); }; tabs.appendChild(t); });
+    j.days.forEach((d, i) => { const t = el('button', 'tab' + (i === sel ? ' on' : ''), dayName(d.date)); t.type = 'button'; t.onclick = () => { sel = i; render(true); }; tabs.appendChild(t); });
     c2.appendChild(tabs);
   }
   const d = j.days[sel], wrap = el('div', 'chartwrap'), grid = el('div', 'grid');
@@ -151,8 +213,8 @@ function render() {
   const nowH = d.date === today ? new Date().getHours() : null;
   for (const h of d.hours) {
     const col = el('div', 'col' + (bestHours.has(h.hour) ? ' best' : '') + (h.hour === myHour ? ' me' : '') + (h.hour === nowH ? ' now' : ''));
-    const bar = el('div', 'bar ' + (h.open === false ? 'closed' : h.level)); bar.style.height = Math.max(4, h.crowd * 1.5) + 'px';
-    col.appendChild(bar);
+    const bar = el('div', 'bar ' + (h.open === false ? 'closed' : h.level)); bar.style.height = Math.max(4, h.crowd * 1.5) + 'px'; bar.style.setProperty('--i', h.hour);
+    col.style.setProperty('--i', h.hour); col.appendChild(bar);
     col.onmouseenter = () => { read.textContent = pad(h.hour) + ':00  ' + (h.open === false ? 'closed' : h.crowd + '% crowded, about ' + h.est_wait_minutes + ' min wait'); };
     chart.appendChild(col); xl.appendChild(el('span', '', h.hour));
   }
@@ -169,7 +231,7 @@ function render() {
     const heat = el('div', 'heat');
     j.days.forEach(day => {
       const row = el('div', 'row'), cells = el('div', 'cells'); row.appendChild(el('em', '', dayName(day.date)));
-      day.hours.forEach(h => { const b = el('b', h.open === false ? 'closed' : h.level); b.title = pad(h.hour) + ':00 ' + h.crowd + '%'; cells.appendChild(b); });
+      day.hours.forEach(h => { const b = el('b', h.open === false ? 'closed' : h.level); b.style.setProperty('--i', h.hour); b.style.setProperty('--r', j.days.indexOf(day)); b.title = pad(h.hour) + ':00 ' + h.crowd + '%'; cells.appendChild(b); });
       row.appendChild(cells); heat.appendChild(row);
     });
     c3.appendChild(heat); out.appendChild(c3);
@@ -177,7 +239,7 @@ function render() {
 }
 
 async function run() {
-  out.textContent = ''; out.appendChild(el('div', 'card msg', 'Loading...'));
+  out.textContent = ''; out.classList.remove('still'); const sk = el('div', 'card'); for (const w of [40, 100, 85, 60]) { const k = el('div', 'skel'); k.style.width = w + '%'; sk.appendChild(k); } out.appendChild(sk);
   try {
     const p = new URLSearchParams(new FormData(f));
     for (const [k, v] of [...p]) if (v === '') p.delete(k);
@@ -197,7 +259,7 @@ function follow(s) {
   if (isDate(s.to)) e.to.value = s.to.slice(0, 10);
   else if (isDate(s.from)) e.to.value = s.from.slice(0, 10);
   if (isTime(s.time)) e.time.value = s.time;
-  followed = true; run();
+  followed = true; curName = r.name || r.id; chip.hidden = false; chip.textContent = 'Synced with map: ' + curName; run();
 }
 if (window.TableWiseSelect) TableWiseSelect.onSelect(follow);
 if (f.elements.id.value) run();

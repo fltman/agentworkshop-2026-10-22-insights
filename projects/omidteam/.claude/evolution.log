@@ -8,3 +8,4 @@
 2026-10-22 10:56 MUTATE: crowd-timing-model energy 60 to 80 (used for 5 changes since spawn)
 2026-10-22 11:07 MUTATE: api-scout reassigned to help daniela with discovery APIs (Overpass outage blocks the whole product)
 2026-10-22 11:15 MERGE: proxy-human agent -> proxy-human capability (an agent file needs a copilot restart, a capability works at once)
+2026-10-22 12:12 SPAWN: tile-render-qa (UI changes shipped 4 times, each needs a render check before PR; macOS has no timeout cmd)

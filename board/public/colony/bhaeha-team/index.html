@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bhaeha-team: Menus + Offers</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
+  #map { height: 360px; border-radius: 6px; margin: 8px 0; }
   body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: #fafafa; color: #222; }
   h1 { font-size: 1.2rem; margin: 0 0 4px; }
   p.sub { margin: 0 0 12px; color: #666; font-size: .85rem; }
@@ -29,7 +31,6 @@
   <label>Lng<input name="lng" value="18.0686" required></label>
   <label>From<input name="from" type="date" required></label>
   <label>To<input name="to" type="date" required></label>
-  <label>Demo data<input name="demo" type="checkbox"></label>
   <button>Fetch</button>
 </form>
 <div class="card">
@@ -37,9 +38,11 @@
   <button type="button" id="loc">Use my location</button>
   <button type="button" id="near">Find nearby</button>
   <span id="nearmsg"></span>
+  <div id="map"></div>
   <ul id="list"></ul>
 </div>
 <div id="out"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   const f = document.getElementById('f');
   const out = document.getElementById('out');
@@ -88,7 +91,7 @@
       c.append(ul);
       out.append(c);
     }
-    if (!d.days.length && !d.offers.length) out.append(el('div', 'No menu items or offers found for this restaurant. Try demo data.'));
+    if (!d.days.length && !d.offers.length) out.append(el('div', d.empty_message || 'No menu items or offers found for this restaurant.'));
   }
 
   const nearmsg = document.getElementById('nearmsg');
@@ -97,22 +100,41 @@
   document.getElementById('loc').addEventListener('click', () => {
     if (!navigator.geolocation) { nearmsg.textContent = ' Geolocation not supported'; return; }
     navigator.geolocation.getCurrentPosition(
-      (p) => { f.lat.value = p.coords.latitude.toFixed(5); f.lng.value = p.coords.longitude.toFixed(5); nearmsg.textContent = ' Location set'; },
-      () => { nearmsg.textContent = ' Location denied, type lat/lng instead'; }
+      (p) => { f.lat.value = p.coords.latitude.toFixed(5); f.lng.value = p.coords.longitude.toFixed(5); nearmsg.textContent = ' Location set'; findNearby(); },
+      () => { nearmsg.textContent = ' Location denied, type lat/lng instead'; },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   });
+
+  const map = L.map('map').setView([59.3293, 18.0686], 14);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+  const markers = L.layerGroup().addTo(map);
+  let me = null;
 
   const findNearby = async () => {
     const lat = Number(f.lat.value), lng = Number(f.lng.value);
     if (!isFinite(lat) || !isFinite(lng)) { nearmsg.textContent = ' Enter valid lat/lng'; return; }
     nearmsg.textContent = ' Searching...';
     list.replaceChildren();
+    markers.clearLayers();
+    if (me) me.remove();
+    me = L.circleMarker([lat, lng], { radius: 8, color: '#2563eb', fillOpacity: 0.8 }).addTo(map).bindTooltip('You');
+    map.setView([lat, lng], 16);
     try {
       const r = await fetch('/t/bhaeha-team/restaurants?' + new URLSearchParams({ lat, lng, radius_m: 800, limit: 25, live: 1 }));
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'failed');
       nearmsg.textContent = ' ' + j.restaurants.length + ' found (' + (j.source === 'osm' ? 'live OpenStreetMap' : 'bundled Overture data') + ')';
       for (const e of j.restaurants) {
+        const open = () => {
+          f.elements.id.value = e.id;
+          f.lat.value = e.lat;
+          f.lng.value = e.lng;
+          f.requestSubmit();
+        };
+        const m = L.marker([e.lat, e.lng]).addTo(markers);
+        m.bindTooltip(e.name);
+        m.on('click', open);
         const li = el('li');
         const b = el('button', e.name + (e.category ? ' (' + e.category.replace(/_/g, ' ') + ')' : '') + ' ' + e.distance_m + ' m');
         b.type = 'button';
@@ -136,7 +158,6 @@
     e.preventDefault();
     out.replaceChildren(el('div', 'Loading...'));
     const q = new URLSearchParams({ id: f.elements.id.value, lat: f.lat.value, lng: f.lng.value, from: f.from.value, to: f.to.value });
-    if (f.demo.checked) q.set('demo', '1');
     try {
       const r = await fetch('/t/bhaeha-team/menu?' + q);
       const d = await r.json();
