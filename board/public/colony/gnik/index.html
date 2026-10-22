@@ -29,6 +29,10 @@
   .bar { height:8px; background:#e9ecf5; border-radius:6px; overflow:hidden; margin-top:3px; }
   .bar i { display:block; height:100%; background:linear-gradient(90deg,#00cec9,var(--ok)); border-radius:6px; }
   .flag { display:flex; gap:8px; align-items:center; padding:7px 9px; border-radius:8px; margin:5px 0; background:#fafbff; border:1px solid #eceff8; }
+  .click { cursor:pointer; }
+  .click:hover { background:#f0f0ff; }
+  .evidence { margin:0 0 6px 12px; padding-left:10px; border-left:3px solid #d6dbea; }
+  .quote { font-style:italic; color:var(--mut); font-size:12px; margin:3px 0; }
   .badge { font-size:11px; font-weight:700; color:#fff; padding:2px 7px; border-radius:20px; text-transform:uppercase; flex:none; }
   .high { background:var(--bad); } .medium { background:var(--warn); } .low { background:#f1c40f; color:#333; }
   .tag { font-size:11px; background:#eef; border-radius:20px; padding:1px 8px; color:var(--acc); }
@@ -53,6 +57,11 @@ function render(d, name) {
   const h = el('div', null, 'rest');
   h.append(el('div', name || d.name || 'Selected restaurant', 'n'));
   frag.append(h);
+  if (!d.review_count) {
+    const n = card('Reviews');
+    n.append(el('div', 'No reviews found for this restaurant yet.', null), el('div', 'We only show real review text, never made-up data.', 'muted'));
+    frag.append(n); out.replaceChildren(frag); return;
+  }
   const pen = d.red_flags.reduce((n, f) => n + (f.severity === 'high' ? 25 : f.severity === 'medium' ? 12 : 5), 0);
   const avg = d.suggested_meals.length ? d.suggested_meals.reduce((n, m) => n + m.sentiment, 0) / d.suggested_meals.length : 0.5;
   const score = Math.max(0, Math.min(100, Math.round(avg * 100 - pen)));
@@ -63,7 +72,7 @@ function render(d, name) {
   const txt = el('div');
   txt.append(el('div', score >= 70 ? 'Looks like a safe bet' : score >= 40 ? 'Mixed reviews, choose carefully' : 'Proceed with caution'));
   txt.append(el('div', d.review_count + ' reviews analysed', 'muted'));
-  txt.append(el('span', d.source === 'mock' ? 'demo data' : 'real reviews', 'tag'));
+  txt.append(el('span', d.source === 'mock' ? 'demo data' : d.source === 'website' ? 'from restaurant website' : 'real reviews', 'tag'));
   row.append(sc, txt); v.append(row); frag.append(v);
 
   const m = card('Order this');
@@ -83,7 +92,16 @@ function render(d, name) {
   d.red_flags.forEach((x) => {
     const r = el('div', null, 'flag');
     r.append(el('span', ICON[x.type] || '\u26A0\uFE0F'), el('span', x.severity, 'badge ' + x.severity), el('span', x.text + ' (' + x.evidence_count + ' reviews)'));
-    f.append(r);
+    const box = el('div');
+    box.append(r);
+    if ((x.evidence || []).length) {
+      r.classList.add('click');
+      const ev = el('div', null, 'evidence'); ev.hidden = true;
+      x.evidence.forEach((t) => ev.append(el('div', '\u201C' + t + '\u201D', 'quote')));
+      r.onclick = () => { ev.hidden = !ev.hidden; };
+      box.append(ev);
+    }
+    f.append(box);
   });
   frag.append(f);
   out.replaceChildren(frag);

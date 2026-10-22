@@ -38,15 +38,17 @@ function analyze(reviews) {
     const text = String(r).slice(0, 1000);
     for (const d of DISHES) {
       if (text.toLowerCase().includes(d)) {
-        const e = dishes[d] || (dishes[d] = { dish: d, mentions: 0, score: 0 });
+        const e = dishes[d] || (dishes[d] = { dish: d, mentions: 0, score: 0, neg: [] });
         e.mentions++;
         e.score += NEG.test(text) ? -1 : POS.test(text) ? 1 : 0;
+        if (NEG.test(text) && e.neg.length < 3) e.neg.push(text.slice(0, 200));
       }
     }
     for (const f of FLAGS) {
       if (f.re.test(text)) {
-        const e = flags[f.type] || (flags[f.type] = { type: f.type, text: f.text, evidence_count: 0 });
+        const e = flags[f.type] || (flags[f.type] = { type: f.type, text: f.text, evidence_count: 0, evidence: [] });
         e.evidence_count++;
+        if (e.evidence.length < 3) e.evidence.push(text.slice(0, 200));
       }
     }
   }
@@ -61,7 +63,7 @@ function analyze(reviews) {
   }));
   for (const e of Object.values(dishes)) {
     if (e.mentions >= 2 && e.score < 0) {
-      red_flags.push({ type: 'dish_warning', text: `Reviewers advise against the ${e.dish}`, severity: 'medium', evidence_count: e.mentions });
+      red_flags.push({ type: 'dish_warning', text: `Reviewers advise against the ${e.dish}`, severity: 'medium', evidence_count: e.mentions, evidence: e.neg });
     }
   }
   return { review_count: reviews.length, suggested_meals, red_flags };
@@ -73,6 +75,8 @@ function send(res, code, obj) {
 }
 
 const fs = require('fs');
+const net = require('net');
+const dns = require('dns').promises;
 const path = require('path');
 const MAX_REVIEWS = 200;
 
@@ -91,6 +95,50 @@ function readBody(req) {
     req.on('end', () => resolve(b));
     req.on('error', reject);
   });
+}
+
+const BASE = process.env.BOARD_URL || 'https://insights.torget.bjarby.com';
+const CACHE_TTL = 30 * 60 * 1000;
+const siteCache = new Map();
+
+function isPrivateIp(ip) {
+  if (net.isIPv6(ip)) return /^(::1?$|fc|fd|fe80|::ffff:)/i.test(ip);
+  const [a, b] = ip.split('.').map(Number);
+  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168);
+}
+
+async function websiteFor(id, lat, lng) {
+  try {
+    const d = new Date().toISOString().slice(0, 10);
+    const q = new URLSearchParams({ id, lat: lat || '0', lng: lng || '0', from: d, to: d });
+    const r = await fetch(`${BASE}/t/bhaeha-team/menu?${q}`, { signal: AbortSignal.timeout(6000) });
+    const j = await r.json();
+    return /^https?:\/\//.test(j.website || '') ? j.website : null;
+  } catch (e) { return null; }
+}
+
+// Review-like sentences from a restaurant's own public page. Pages often have none, then the result is empty.
+async function siteReviews(url) {
+  const hit = siteCache.get(url);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.texts;
+  let texts = [];
+  try {
+    const u = new URL(url);
+    const addrs = await dns.lookup(u.hostname, { all: true });
+    if (!addrs.length || addrs.some((a) => isPrivateIp(a.address))) return [];
+    const r = await fetch(url, { headers: { 'user-agent': 'tablewise-workshop/1.0', accept: 'text/html' }, redirect: 'manual', signal: AbortSignal.timeout(6000) });
+    if (!r.ok || !/text\/html/.test(r.headers.get('content-type') || '')) return [];
+    const html = (await r.text()).slice(0, 300000);
+    const text = html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, '\n').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+    for (const raw of text.split(/\n|(?<=[.!?])\s+/)) {
+      const line = raw.replace(/\s+/g, ' ').trim();
+      if (line.length < 20 || line.length > 300) continue;
+      if (DISHES.some((d) => line.toLowerCase().includes(d)) || FLAGS.some((f) => f.re.test(line))) texts.push(line);
+      if (texts.length >= 100) break;
+    }
+  } catch (e) { texts = []; }
+  siteCache.set(url, { ts: Date.now(), texts });
+  return texts;
 }
 
 module.exports = {
@@ -117,8 +165,13 @@ module.exports = {
     }
     const name = (url.searchParams.get('name') || '').slice(0, 200);
     const real = load(ctx, id);
-    if (real.length) send(res, 200, { id, name, ...analyze(real), source: 'reviews' });
-    else send(res, 200, { id, name, ...analyze(mockReviews(id)), source: 'mock' });
+    if (real.length) { send(res, 200, { id, name, ...analyze(real), source: 'reviews' }); return true; }
+    if (url.searchParams.get('demo') === '1') { send(res, 200, { id, name, ...analyze(mockReviews(id)), source: 'mock' }); return true; }
+    const site = (url.searchParams.get('website') && /^https?:\/\//.test(url.searchParams.get('website'))) ? url.searchParams.get('website')
+      : await websiteFor(id, url.searchParams.get('lat'), url.searchParams.get('lng'));
+    const texts = site ? await siteReviews(site) : [];
+    if (texts.length >= 3) send(res, 200, { id, name, ...analyze(texts), source: 'website' });
+    else send(res, 200, { id, name, review_count: 0, suggested_meals: [], red_flags: [], source: 'none' });
     return true;
   },
 };
