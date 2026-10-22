@@ -1,13 +1,19 @@
 // gnik: review analysis (suggested meals + red-flag outliers). See projects/gnik/CONTRACT.md
-const DISHES = ['carbonara', 'margherita pizza', 'tiramisu', 'ramen', 'pad thai', 'burger', 'risotto', 'caesar salad', 'fish and chips', 'lasagna'];
+// The first 10 dishes are also used by the demo generator
+const DISHES = ['carbonara', 'margherita pizza', 'tiramisu', 'ramen', 'pad thai', 'burger', 'risotto', 'caesar salad', 'fish and chips', 'lasagna',
+  'pizza', 'pasta', 'sushi', 'steak', 'taco', 'curry', 'falafel', 'kebab', 'schnitzel', 'salmon', 'ceviche', 'paella', 'pho', 'dumplings', 'gnocchi', 'bruschetta',
+  'meatballs', 'k\u00F6ttbullar', 'raggmunk', 'pyttipanna', 'sill', 'r\u00E4ksm\u00F6rg\u00E5s', 'toast skagen', 'laxsoppa', 'fiskgryta', 'dagens', 'hamburgare', 'pannkakor', 'wallenbergare', 'biff', 'lax'];
 const FLAGS = [
-  { type: 'wait_time', re: /(long|huge) (wait|queue|line)|slow service|hour for/i, text: 'Long waits reported' },
-  { type: 'cleanliness', re: /dirty|unclean|filthy|sticky tables?|cockroach/i, text: 'Cleanliness complaints' },
-  { type: 'service', re: /rude|ignored us|unfriendly|wrong order/i, text: 'Service complaints' },
-  { type: 'price', re: /overpriced|rip.?off|too expensive/i, text: 'Perceived as overpriced' },
+  { type: 'wait_time', re: /(long|huge|endless) (wait|queue|line)|slow service|hour for|waited (over |more than )?\d+ ?(min|hour)|l\u00E5ng v\u00E4ntetid|v\u00E4ntade (i )?(en )?(timme|l\u00E4nge)|l\u00E5ngsam|k\u00F6ade|lång kö|lång väntan/i, text: 'Long waits reported' },
+  { type: 'cleanliness', re: /dirty|unclean|filthy|sticky tables?|cockroach|smelled|sm\u00E5tt|smutsig|skitig|\u00E4cklig|kackerlack|lortig|ostädat|ostädad/i, text: 'Cleanliness complaints' },
+  { type: 'service', re: /rude|ignored us|unfriendly|wrong order|inattentive|otrevlig|ohyfsad|oh\u00F6flig|ignorerade|fel best\u00E4llning|d\u00E5lig service|dålig service/i, text: 'Service complaints' },
+  { type: 'price', re: /overpriced|rip.?off|too expensive|not worth the (price|money)|\u00F6verpriset|\u00F6verpris|f\u00F6r dyrt|dyrt f\u00F6r|inte v\u00E4rt/i, text: 'Perceived as overpriced' },
+  { type: 'food_safety', re: /food poisoning|got sick|stomach ache|matf\u00F6rgiftning|blev sjuk|magont/i, text: 'Food safety concerns' },
 ];
-const POS = /(great|amazing|delicious|best|love|perfect|fresh|excellent)/i;
-const NEG = /(bad|bland|cold|awful|terrible|worst|disappoint|overcooked|undercooked)/i;
+const POS = /(great|amazing|delicious|best|love[d]?|perfect|fresh|excellent|tasty|g\u00F6tt|gott|utm\u00E4rkt|fantastisk|b\u00E4st|toppen|favorit|perfekt|underbar|nyttlagad|jättegod|jättegott)/i;
+const NEG = /(bad|bland|cold|awful|terrible|worst|disappoint|overcooked|undercooked|dry|greasy|d\u00E5lig|tr\u00E5kig|smaklös|kall|torr|besviken|seg|fet|vidrig|äcklig)/i;
+// Drops "not dirty", "inte gott" style phrases so negated words do not count
+const negated = (t) => t.replace(/\b(not|never|no|n't|inte|aldrig|ingen|inget|utan)\s+(?:very\s+|so\s+|too\s+|s\u00E4rskilt\s+|speciellt\s+)?[\p{L}]+/giu, ' ');
 
 function hash(s) {
   let h = 2166136261;
@@ -19,7 +25,7 @@ function hash(s) {
 function mockReviews(id) {
   let h = hash(id);
   const rnd = () => { h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0; return h / 4294967296; };
-  const dishes = [0, 1, 2].map(() => DISHES[Math.floor(rnd() * DISHES.length)]);
+  const dishes = [0, 1, 2].map(() => DISHES[Math.floor(rnd() * 10)]);
   const out = [];
   const n = 12 + Math.floor(rnd() * 20);
   for (let i = 0; i < n; i++) {
@@ -36,16 +42,17 @@ function analyze(reviews) {
   const flags = {};
   for (const r of reviews) {
     const text = String(r).slice(0, 1000);
+    const clean = negated(text);
     for (const d of DISHES) {
       if (text.toLowerCase().includes(d)) {
         const e = dishes[d] || (dishes[d] = { dish: d, mentions: 0, score: 0, neg: [] });
         e.mentions++;
-        e.score += NEG.test(text) ? -1 : POS.test(text) ? 1 : 0;
-        if (NEG.test(text) && e.neg.length < 3) e.neg.push(text.slice(0, 200));
+        e.score += NEG.test(clean) ? -1 : POS.test(clean) ? 1 : 0;
+        if (NEG.test(clean) && e.neg.length < 3) e.neg.push(text.slice(0, 200));
       }
     }
     for (const f of FLAGS) {
-      if (f.re.test(text)) {
+      if (f.re.test(clean)) {
         const e = flags[f.type] || (flags[f.type] = { type: f.type, text: f.text, evidence_count: 0, evidence: [] });
         e.evidence_count++;
         if (e.evidence.length < 3) e.evidence.push(text.slice(0, 200));
@@ -141,6 +148,67 @@ async function siteReviews(url) {
   return texts;
 }
 
+// Google Places (New) reviews. Key stays in the server env, is never returned or logged.
+const G_TTL = 24 * 60 * 60 * 1000;
+const G_NEG_TTL = 60 * 60 * 1000;
+const G_MAX_PER_MIN = 30;
+const gCache = new Map();
+let gWindow = { start: 0, n: 0 };
+
+function gAllowed() {
+  const now = Date.now();
+  if (now - gWindow.start > 60000) gWindow = { start: now, n: 0 };
+  return ++gWindow.n <= G_MAX_PER_MIN;
+}
+
+const reviewTexts = (place) => ((place && place.reviews) || [])
+  .map((r) => (r.originalText && r.originalText.text) || (r.text && r.text.text) || '')
+  .filter(Boolean);
+
+function distM(lat1, lng1, lat2, lng2) {
+  const k = Math.PI / 180;
+  const dx = (lng2 - lng1) * k * Math.cos(((lat1 + lat2) / 2) * k) * 6371000;
+  const dy = (lat2 - lat1) * k * 6371000;
+  return Math.hypot(dx, dy);
+}
+
+async function googleReviews(id, name, lat, lng) {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key) return [];
+  const isGoogle = id.startsWith('google:');
+  const latN = Number(lat), lngN = Number(lng);
+  if (!isGoogle && (!name || !isFinite(latN) || !isFinite(lngN))) return [];
+  const ck = isGoogle ? id : `${id}`;
+  const hit = gCache.get(ck);
+  if (hit && Date.now() - hit.ts < (hit.texts.length ? G_TTL : G_NEG_TTL)) return hit.texts;
+  if (!gAllowed()) return [];
+  let texts = [];
+  try {
+    const headers = { 'X-Goog-Api-Key': key, 'Content-Type': 'application/json' };
+    if (isGoogle) {
+      const pid = id.slice(7);
+      if (!/^[A-Za-z0-9_-]{5,200}$/.test(pid)) return [];
+      const r = await fetch(`https://places.googleapis.com/v1/places/${pid}`, { headers: { ...headers, 'X-Goog-FieldMask': 'reviews' }, signal: AbortSignal.timeout(6000) });
+      if (r.ok) texts = reviewTexts(await r.json());
+    } else {
+      const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: { ...headers, 'X-Goog-FieldMask': 'places.displayName,places.location,places.reviews' },
+        body: JSON.stringify({ textQuery: name, maxResultCount: 1, locationBias: { circle: { center: { latitude: latN, longitude: lngN }, radius: 150 } } }),
+        signal: AbortSignal.timeout(6000),
+      });
+      if (r.ok) {
+        const place = ((await r.json()).places || [])[0];
+        const loc = place && place.location;
+        // Only accept a match that is really at this spot
+        if (loc && distM(latN, lngN, loc.latitude, loc.longitude) <= 150) texts = reviewTexts(place);
+      }
+    }
+  } catch (e) { console.error('[gnik] google:', e && e.name); }
+  gCache.set(ck, { ts: Date.now(), texts });
+  return texts;
+}
+
 module.exports = {
   async handle(req, res, ctx) {
     const url = new URL(req.url, 'http://x');
@@ -167,6 +235,8 @@ module.exports = {
     const real = load(ctx, id);
     if (real.length) { send(res, 200, { id, name, ...analyze(real), source: 'reviews' }); return true; }
     if (url.searchParams.get('demo') === '1') { send(res, 200, { id, name, ...analyze(mockReviews(id)), source: 'mock' }); return true; }
+    const g = await googleReviews(id, name, url.searchParams.get('lat'), url.searchParams.get('lng'));
+    if (g.length) { send(res, 200, { id, name, ...analyze(g), source: 'google' }); return true; }
     const site = (url.searchParams.get('website') && /^https?:\/\//.test(url.searchParams.get('website'))) ? url.searchParams.get('website')
       : await websiteFor(id, url.searchParams.get('lat'), url.searchParams.get('lng'));
     const texts = site ? await siteReviews(site) : [];

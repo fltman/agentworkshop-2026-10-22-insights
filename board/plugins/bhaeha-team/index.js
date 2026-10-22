@@ -39,13 +39,175 @@ async function lookupOsm(id) {
       body: 'data=' + encodeURIComponent(body),
       signal: AbortSignal.timeout(8000),
     });
-    if (!r.ok) return null;
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const j = await r.json();
     const tags = (j.elements && j.elements[0] && j.elements[0].tags) || null;
     if (tags) cache.set(id, { ts: Date.now(), tags });
     return tags;
   } catch (err) {
     console.error('[bhaeha-team] overpass:', err && err.message);
+    return lookupNominatim(id, m[1], m[2]);
+  }
+}
+
+// Google Places (New). The key is read only from the server environment and never logged or returned.
+const googleKey = () => process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API || '';
+const googleCache = new Map();
+const GOOGLE_DETAIL_FIELDS = [
+  'displayName', 'formattedAddress', 'nationalPhoneNumber', 'internationalPhoneNumber', 'websiteUri', 'googleMapsUri',
+  'rating', 'userRatingCount', 'priceLevel', 'priceRange', 'businessStatus', 'primaryTypeDisplayName', 'types',
+  'editorialSummary', 'regularOpeningHours', 'currentOpeningHours', 'dineIn', 'takeout', 'delivery', 'reservable',
+  'outdoorSeating', 'liveMusic', 'goodForGroups', 'goodForChildren', 'allowsDogs', 'accessibilityOptions',
+  'servesVegetarianFood', 'servesBreakfast', 'servesBrunch', 'servesLunch', 'servesDinner', 'servesBeer', 'servesWine',
+  'servesCocktails', 'servesCoffee', 'servesDessert', 'menuForChildren', 'paymentOptions', 'parkingOptions',
+].join(',');
+const PRICE_LEVELS = { PRICE_LEVEL_FREE: 'Free', PRICE_LEVEL_INEXPENSIVE: '$', PRICE_LEVEL_MODERATE: '$$', PRICE_LEVEL_EXPENSIVE: '$$$', PRICE_LEVEL_VERY_EXPENSIVE: '$$$$' };
+
+// Flattens Google's place details into plain label/value facts for display. Only strings, numbers and lists of strings.
+function googleFacts(j) {
+  const f = {};
+  const put = (k, v) => { if (v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)) f[k] = v; };
+  put('rating', j.rating);
+  put('rating_count', j.userRatingCount);
+  put('price_level', PRICE_LEVELS[j.priceLevel]);
+  if (j.priceRange && j.priceRange.startPrice) {
+    const sp = j.priceRange.startPrice, ep = j.priceRange.endPrice;
+    put('price_range', `${sp.units || 0}${ep ? '-' + (ep.units || '') : '+'} ${sp.currencyCode || ''}`.trim());
+  }
+  put('status', j.businessStatus);
+  put('type', j.primaryTypeDisplayName && j.primaryTypeDisplayName.text);
+  put('summary', j.editorialSummary && j.editorialSummary.text);
+  put('phone', j.internationalPhoneNumber || j.nationalPhoneNumber);
+  put('address', j.formattedAddress);
+  put('website', httpUrl(j.websiteUri));
+  put('google_maps', httpUrl(j.googleMapsUri));
+  put('open_now', j.currentOpeningHours && typeof j.currentOpeningHours.openNow === 'boolean' ? (j.currentOpeningHours.openNow ? 'yes' : 'no') : undefined);
+  put('opening_hours', (j.regularOpeningHours && j.regularOpeningHours.weekdayDescriptions) || undefined);
+  const yes = ['dineIn', 'takeout', 'delivery', 'reservable', 'outdoorSeating', 'liveMusic', 'goodForGroups', 'goodForChildren', 'allowsDogs', 'menuForChildren']
+    .filter((x) => j[x] === true).map((x) => x.replace(/([A-Z])/g, ' $1').toLowerCase());
+  put('features', yes);
+  const serves = ['Vegetarian', 'Breakfast', 'Brunch', 'Lunch', 'Dinner', 'Beer', 'Wine', 'Cocktails', 'Coffee', 'Dessert'].filter((x) => j['serves' + x + (x === 'Vegetarian' ? 'Food' : '')] === true);
+  put('serves', serves);
+  const acc = j.accessibilityOptions || {};
+  put('accessibility', Object.keys(acc).filter((x) => acc[x] === true).map((x) => x.replace(/([A-Z])/g, ' $1').toLowerCase()));
+  const pay = j.paymentOptions || {};
+  put('payment', Object.keys(pay).filter((x) => pay[x] === true).map((x) => x.replace(/([A-Z])/g, ' $1').toLowerCase()));
+  const park = j.parkingOptions || {};
+  put('parking', Object.keys(park).filter((x) => park[x] === true).map((x) => x.replace(/([A-Z])/g, ' $1').toLowerCase()));
+  return f;
+}
+
+// Details for ids "google:<place_id>": returns tags like OSM so the same menu pipeline can use the website.
+async function lookupGoogle(id) {
+  const m = /^google:([A-Za-z0-9_-]{10,200})$/.exec(id);
+  const key = googleKey();
+  if (!m || !key) return null;
+  const hit = googleCache.get(id);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.tags;
+  try {
+    const r = await fetch(`https://places.googleapis.com/v1/places/${m[1]}`, {
+      headers: { 'x-goog-api-key': key, 'x-goog-fieldmask': GOOGLE_DETAIL_FIELDS },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const facts = googleFacts(j);
+    const tags = { name: j.displayName && j.displayName.text, website: j.websiteUri, phone: facts.phone, address: j.formattedAddress, _google: true, 'diet:vegetarian': j.servesVegetarianFood ? 'yes' : undefined, google: facts };
+    googleCache.set(id, { ts: Date.now(), tags });
+    return tags;
+  } catch (err) {
+    console.error('[bhaeha-team] google details:', err && err.message);
+    return null;
+  }
+}
+
+async function googleNearby(lat, lng, radiusM, limit) {
+  const key = googleKey();
+  if (!key) return null;
+  try {
+    const r = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'x-goog-api-key': key,
+        'content-type': 'application/json',
+        'x-goog-fieldmask': 'places.id,places.displayName,places.location,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,places.primaryType',
+      },
+      body: JSON.stringify({
+        includedTypes: ['restaurant'],
+        maxResultCount: Math.min(limit, 20),
+        rankPreference: 'DISTANCE',
+        locationRestriction: { circle: { center: { latitude: lat, longitude: lng }, radius: Math.min(radiusM, 50000) } },
+      }),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const k = Math.cos(lat * Math.PI / 180);
+    return (j.places || []).filter((p) => p.id && p.location).map((p) => ({
+      id: 'google:' + p.id,
+      name: (p.displayName && p.displayName.text) || 'Unnamed',
+      lat: p.location.latitude,
+      lng: p.location.longitude,
+      category: (p.primaryType || 'restaurant'),
+      website: httpUrl(p.websiteUri),
+      phone: p.nationalPhoneNumber || null,
+      address: p.formattedAddress || null,
+      distance_m: Math.round(Math.hypot((p.location.latitude - lat) * 111320, (p.location.longitude - lng) * 111320 * k)),
+    }));
+  } catch (err) {
+    console.error('[bhaeha-team] google nearby:', err && err.message);
+    return null;
+  }
+}
+
+const NOMINATIM = 'https://nominatim.openstreetmap.org';
+const nominatimHeaders = { 'user-agent': 'tablewise-workshop/1.0', accept: 'application/json' };
+
+// Fallback when Overpass is down: same OSM tags via Nominatim's lookup API.
+async function lookupNominatim(id, type, num) {
+  try {
+    const r = await fetch(`${NOMINATIM}/lookup?format=jsonv2&extratags=1&osm_ids=${type[0].toUpperCase()}${num}`, { headers: nominatimHeaders, signal: AbortSignal.timeout(6000) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const tags = j[0] && j[0].extratags ? { ...j[0].extratags } : null;
+    if (tags) cache.set(id, { ts: Date.now(), tags });
+    return tags;
+  } catch (err) {
+    console.error('[bhaeha-team] nominatim lookup:', err && err.message);
+    return null;
+  }
+}
+
+// Fallback when Overpass is down: OSM restaurants in a bounding box via Nominatim (works worldwide, max 40 results).
+async function nominatimNearby(lat, lng, radiusM, limit) {
+  const dLat = radiusM / 111320;
+  const dLng = radiusM / (111320 * Math.max(Math.cos(lat * Math.PI / 180), 0.01));
+  const viewbox = [lng - dLng, lat + dLat, lng + dLng, lat - dLat].map((x) => x.toFixed(5)).join(',');
+  const url = `${NOMINATIM}/search?format=jsonv2&extratags=1&addressdetails=1&bounded=1&limit=${Math.min(limit, 40)}&q=restaurant&viewbox=${viewbox}`;
+  try {
+    const r = await fetch(url, { headers: nominatimHeaders, signal: AbortSignal.timeout(6000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const k = Math.cos(lat * Math.PI / 180);
+    return j.filter((e) => e.type === 'restaurant' && e.name && ['node', 'way', 'relation'].includes(e.osm_type)).map((e) => {
+      const t = e.extratags || {};
+      const la = Number(e.lat);
+      const ln = Number(e.lon);
+      return {
+        id: 'osm:' + e.osm_type + ':' + e.osm_id,
+        name: e.name,
+        lat: la,
+        lng: ln,
+        category: t.cuisine ? t.cuisine.split(';')[0] + '_restaurant' : 'restaurant',
+        website: httpUrl(t.website || t['contact:website']),
+        phone: t.phone || t['contact:phone'] || null,
+        address: e.address ? [e.address.road, e.address.house_number].filter(Boolean).join(' ') || null : null,
+        opening_hours: t.opening_hours || null,
+        distance_m: Math.round(Math.hypot((la - lat) * 111320, (ln - lng) * 111320 * k)),
+      };
+    }).sort((a, b) => a.distance_m - b.distance_m);
+  } catch (err) {
+    console.error('[bhaeha-team] nominatim:', err && err.message);
     return null;
   }
 }
@@ -55,6 +217,11 @@ async function liveOsmNearby(lat, lng, radiusM, limit) {
   const key = [lat.toFixed(3), lng.toFixed(3), radiusM, limit].join(':');
   const hit = nearCache.get(key);
   if (hit && Date.now() - hit.ts < 10 * 60 * 1000) return hit.list;
+  const g = await googleNearby(lat, lng, radiusM, limit);
+  if (g && g.length) {
+    nearCache.set(key, { ts: Date.now(), list: g, source: 'google' });
+    return g;
+  }
   const body = 'data=' + encodeURIComponent(`[out:json][timeout:8];nwr(around:${radiusM},${lat},${lng})["amenity"="restaurant"]["name"];out center tags ${limit};`);
   const ask = (url) => fetch(url, {
     method: 'POST',
@@ -92,7 +259,9 @@ async function liveOsmNearby(lat, lng, radiusM, limit) {
     return list.length ? list : null;
   } catch (err) {
     console.error('[bhaeha-team] live osm:', err && err.errors ? err.errors.map((x) => x.message).join('; ') : err && err.message);
-    return null;
+    const list = await nominatimNearby(lat, lng, radiusM, limit);
+    if (list && list.length) nearCache.set(key, { ts: Date.now(), list });
+    return list && list.length ? list : null;
   }
 }
 
@@ -269,7 +438,7 @@ module.exports = {
         const limit = Math.min(Math.max(parseInt(q.get('limit'), 10) || 100, 1), 300);
         if (q.get('live') === '1') {
           const live = await liveOsmNearby(lat, lng, radius, limit);
-          if (live) return send(res, 200, { source: 'osm', restaurants: live }), true;
+          if (live) return send(res, 200, { source: live[0].id.startsWith('google:') ? 'google' : 'osm', restaurants: live }), true;
         }
         send(res, 200, { source: 'overture', restaurants: nearby(lat, lng, radius, limit) });
       } catch (err) {
@@ -294,8 +463,9 @@ module.exports = {
       if (to < from) return send(res, 400, { error: 'to must not be before from' }), true;
       if ((to - from) / 86400000 + 1 > MAX_DAYS) return send(res, 400, { error: `range is limited to ${MAX_DAYS} days` }), true;
       const place = id.startsWith('overture:') ? placeById(id) : null;
-      const tags = place ? { website: place.website, phone: place.phone, name: place.name, address: place.address, _overture: true } : await lookupOsm(id);
+      const tags = place ? { website: place.website, phone: place.phone, name: place.name, address: place.address, _overture: true } : id.startsWith('google:') ? await lookupGoogle(id) : await lookupOsm(id);
       const out = tags ? fromOsm(id, from, to, tags) : { id, from: iso(from), to: iso(to), menu_url: null, days: [], offers: [], source: 'none', confidence: 0 };
+      if (tags && tags._google) Object.assign(out, { source: 'google', google: tags.google, name: tags.name, phone: tags.phone || null, address: tags.address || null });
       if (tags && tags._overture) Object.assign(out, { source: 'overture', name: tags.name, phone: tags.phone || null, address: tags.address || null });
       const items = out.menu_url || out.website ? await scrapeMenu(out.menu_url || out.website) : [];
       if (!items.length) {

@@ -140,6 +140,7 @@ function dayFactors(d, hours, o) {
 function compute(q, tags, wx, hol) {
   const id = String(q.id || '').slice(0, 100);
   if (!id) return { error: 'id is required' };
+  for (const k of ['from', 'to']) if (q[k] != null && q[k] !== '' && !parseDate(q[k])) return { error: k + ' must be a date like 2026-10-23' };
   const from = parseDate(q.from) || new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
   const to = parseDate(q.to) || from;
   const days = Math.round((to - from) / 86400000) + 1;

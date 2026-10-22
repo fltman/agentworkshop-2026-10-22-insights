@@ -144,3 +144,56 @@ test('uses the next provider when the first mirror is unavailable', async (t) =>
   assert.equal(result.body.restaurants[0].restaurant_id, 'osm:node/456');
   assert.equal(unavailableCalls, 1);
 });
+
+test('prefers Google Places with a server-only environment key', async (t) => {
+  const provider = http.createServer((request, response) => {
+    assert.equal(request.headers['x-goog-api-key'], 'test-google-key');
+    assert.match(request.headers['x-goog-fieldmask'], /places\.location/);
+    request.resume();
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({
+      places: [{
+        id: 'ChIJ123',
+        displayName: { text: 'Google Bistro' },
+        location: { latitude: 59.3293, longitude: 18.0686 },
+        types: ['restaurant', 'italian_restaurant'],
+        formattedAddress: 'Google Street 1',
+        nationalPhoneNumber: '+46 8 555 12 34',
+        websiteUri: 'https://example.test',
+        priceLevel: 'PRICE_LEVEL_MODERATE',
+      }],
+    }));
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const previousKey = process.env.GOOGLE_MAPS_API;
+  const previousUrl = process.env.GOOGLE_PLACES_URL;
+  process.env.GOOGLE_MAPS_API = 'test-google-key';
+  process.env.GOOGLE_PLACES_URL = `http://127.0.0.1:${provider.address().port}`;
+  t.after(() => {
+    if (previousKey === undefined) delete process.env.GOOGLE_MAPS_API;
+    else process.env.GOOGLE_MAPS_API = previousKey;
+    if (previousUrl === undefined) delete process.env.GOOGLE_PLACES_URL;
+    else process.env.GOOGLE_PLACES_URL = previousUrl;
+    provider.close();
+  });
+
+  const result = await invoke('/search?lat=59.3293&lng=18.0686&cuisines=italian');
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, {
+    restaurants: [{
+      restaurant_id: 'google:ChIJ123',
+      name: 'Google Bistro',
+      lat: 59.3293,
+      lng: 18.0686,
+      cuisines: ['italian'],
+      price_level: 2,
+      address: 'Google Street 1',
+      phone: '+46 8 555 12 34',
+      website: 'https://example.test',
+      openingHours: null,
+      source: 'google-places',
+    }],
+  });
+  assert.equal(JSON.stringify(result.body).includes('test-google-key'), false);
+});

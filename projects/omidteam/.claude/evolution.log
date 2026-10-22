@@ -9,3 +9,6 @@
 2026-10-22 11:07 MUTATE: api-scout reassigned to help daniela with discovery APIs (Overpass outage blocks the whole product)
 2026-10-22 11:15 MERGE: proxy-human agent -> proxy-human capability (an agent file needs a copilot restart, a capability works at once)
 2026-10-22 12:12 SPAWN: tile-render-qa (UI changes shipped 4 times, each needs a render check before PR; macOS has no timeout cmd)
+2026-10-22 12:58 SPAWN: app-tester (whole app, deep on our module; live checks after each release)
+2026-10-22 12:58 SPAWN: task-follow-up (ledger FOLLOWUP.md; chases tasks of our agents and others until verified)
+2026-10-22 13:03 SPAWN: idea-innovator capability (the innovator agent needs a copilot restart; run innovator, app-tester, task-follow-up in parallel)

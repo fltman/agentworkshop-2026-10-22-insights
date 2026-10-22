@@ -73,10 +73,14 @@ The service stores no user profile and never exposes client identifiers.
 
 ## Provider Discovery
 
-The initial provider is [OpenStreetMap Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API),
-which exposes restaurant points and contact tags without application credentials. The server calls it,
-never the browser, and uses a short in-memory cache to reduce public-service load. `OVERPASS_URL` can
-override the endpoint for local tests or a hosted provider.
+When `GOOGLE_MAPS_API` is configured, [Google Places Nearby Search](https://developers.google.com/maps/documentation/places/web-service/nearby-search)
+is the preferred provider. The key is read only by the server and sent only in the upstream
+`X-Goog-Api-Key` header; it is never returned to browsers or included in API responses.
+`GOOGLE_PLACES_API_KEY` remains a compatibility alias for the live workshop environment.
+
+OpenStreetMap Overpass remains the keyless fallback. The server calls providers, never the browser,
+and uses a short in-memory cache to reduce load. `OVERPASS_URL` can override the fallback endpoint
+for local tests or a hosted provider.
 
 [Nominatim](https://nominatim.org/release-docs/develop/api/Search/) remains an optional future
 geocoding provider for text-to-location input; it is not needed when the map supplies coordinates.

@@ -49,8 +49,8 @@ body .tile.gauge{background:var(--card)}
 body .rain{background:#1a2a3a;color:#8fbbe8}
 body .why{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:11px;color:var(--mut)}
 .why span{border:1px solid var(--line);border-radius:999px;padding:2px 8px;animation:pop .35s both;animation-delay:calc(var(--i,0)*50ms)}
-.compact #formcard,.compact #near,.compact .heatcard,.compact .copyrow,.compact .legend,.compact .src,.compact .why,.compact .rain{display:none}
-.compact body{padding:6px}.compact #out .card:nth-child(n+2){display:none}
+.embed #formcard,.embed #near,.embed #chip,.compact #formcard,.compact #near,.compact .heatcard,.compact .copyrow,.compact .legend,.compact .src,.compact .why,.compact .rain{display:none}
+.compact body{padding:6px}html.embed body{padding:0}.compact #out .card:nth-child(n+2){display:none}
 .ribbon{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;margin:10px 0 2px;height:10px;position:relative}
 .ribbon b{border-radius:3px;opacity:.9}
 .ribbon b.low{background:linear-gradient(90deg,#2a9d8f,#5ec4b6)}.ribbon b.medium{background:linear-gradient(90deg,#e9b44c,#f4cf7a)}.ribbon b.high{background:linear-gradient(90deg,#e4572e,#f08a6a)}.ribbon b.closed{background:#3a3f48}
@@ -67,6 +67,7 @@ body .why{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;
 @media (prefers-reduced-motion:reduce){html:not(.force) .card:hover{transform:none}}
 .col:focus-visible{outline:2px solid #fff;outline-offset:2px;border-radius:6px}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #4cc9f0;outline-offset:2px}
+.tile em{display:block;font-style:normal;font-size:11px;margin-top:6px;opacity:.9}.trend.up{color:#f08a6a}.trend.down{color:#5ec4b6}
 .chip{background:#16322e;border-color:#235a52;color:#6fd3c4}
 body .closed{background:repeating-linear-gradient(45deg,var(--closed),var(--closed) 4px,#2c3036 4px,#2c3036 8px)}
 body .skel{background:linear-gradient(90deg,#2a2e34 25%,#343a42 37%,#2a2e34 63%);background-size:400px 100%}
@@ -152,6 +153,8 @@ h1 i{animation:pulse 1.8s ease-out infinite}
 const f = document.getElementById('f'), out = document.getElementById('out');
 const today = new Date().toISOString().slice(0, 10);
 const qs = new URLSearchParams(location.search);
+const embed = qs.get('embed') === '1';
+if (embed) document.documentElement.classList.add('embed');
 for (const e of f.elements) if (e.name) e.value = qs.get(e.name) || e.value || (e.type === 'date' ? today : '');
 if (qs.get('max_wait_min')) f.elements.maxWaitMinutes.value = qs.get('max_wait_min');
 const demo = document.getElementById('demo');
@@ -202,7 +205,7 @@ document.getElementById('loc').addEventListener('click', () => {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(p => { place.lat = p.coords.latitude; place.lng = p.coords.longitude; gotPos = true; loadNearby(); if (data) render(true); }, () => {});
 });
-loadNearby();
+if (!(embed && f.elements.id.value)) loadNearby();
 const svgEl = (t, a) => { const e = document.createElementNS('http://www.w3.org/2000/svg', t); for (const k in a) e.setAttribute(k, a[k]); return e; };
 const localDate = () => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); };
 function spark(hours, nowH, level) {
@@ -229,12 +232,19 @@ function gaugeTile(j) {
   t.appendChild(svg);
   t.appendChild(el('b', '', closed ? 'Closed' : { low: 'Quiet', medium: 'Busy', high: 'Packed' }[h.level]));
   t.appendChild(el('span', '', closed ? 'closed this hour' : c + '% crowded, about ' + h.est_wait_minutes + ' min wait'));
+  if (!closed) {
+    const rest = d.hours.filter(x => x.hour > nowH && x.open !== false), nx = rest[0];
+    if (nx && nx.crowd - c >= 8) { const pk = rest.reduce((m, x) => (x.crowd > m.crowd ? x : m), nx); t.appendChild(el('em', 'trend up', '\u25B2 Getting busier, peaks about ' + pad(pk.hour) + ':00')); }
+    else if (nx && c - nx.crowd >= 8) { const q = rest.find(x => x.level === 'low'); t.appendChild(el('em', 'trend down', '\u25BC Quieting down' + (q ? ', calm by ' + pad(q.hour) + ':00' : ''))); }
+    else if (nx) t.appendChild(el('em', 'trend', '\u25B6 Steady for the next hour'));
+  }
   if (!calm) requestAnimationFrame(() => requestAnimationFrame(() => { arc.style.strokeDasharray = c + ' 100'; needle.style.transform = 'rotate(' + deg + 'deg)'; }));
   return t;
 }
 let nearTok = 0;
 let nearHour = null;
 async function rankNearby() {
+  if (embed) return;
   const tok = ++nearTok, box = document.getElementById('near'), nowH = new Date().getHours(), h = nearHour != null ? nearHour : Math.min(23, Math.max(8, nowH));
   const label = nearHour == null && nowH === h ? 'right now' : 'at ' + pad(h) + ':00';
   box.textContent = '';
@@ -415,6 +425,11 @@ function render(again) {
   c2.appendChild(el('div', 'src', 'Estimates, not live counts. Data: ' + j.source));
   out.appendChild(c2);
 
+  if (j.days.length === 1) {
+    const wk = el('button', 'tab wk', 'See the whole week'); wk.type = 'button'; wk.style.margin = '0 0 12px';
+    wk.onclick = () => { const t = new Date(j.days[0].date + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + 6); f.elements.to.value = t.toISOString().slice(0, 10); wk.textContent = 'Loading week...'; run(); };
+    out.appendChild(wk);
+  }
   if (j.days.length > 1) {
     const c3 = el('div', 'card heatcard'); c3.appendChild(el('div', 'src', 'All days at a glance'));
     const heat = el('div', 'heat');
@@ -460,6 +475,10 @@ function follow(s) {
   if (isTime(s.time)) e.time.value = s.time;
   followed = true; curName = r.name || r.id; chip.hidden = false; chip.textContent = 'Synced with map: ' + curName; run();
 }
-if (window.TableWiseSelect) TableWiseSelect.onSelect(follow);
+if (window.TableWiseSelect && !embed) TableWiseSelect.onSelect(follow);
+if (embed && window.parent !== window && window.ResizeObserver) {
+  let last = 0;
+  new ResizeObserver(() => { const h = document.documentElement.scrollHeight; if (Math.abs(h - last) > 2) { last = h; parent.postMessage({ type: 'omidteam-height', height: h }, '*'); } }).observe(document.body);
+}
 if (f.elements.id.value) run();
 </script></body></html>
