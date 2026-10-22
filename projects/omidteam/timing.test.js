@@ -57,3 +57,8 @@ test('days have factors and health reports cache state', async () => {
   const h = await call('/health');
   assert.ok(h.body.ok && h.body.opening_hours_cache && typeof h.body.opening_hours_cache.entries === 'number');
 });
+
+test('invalid from date is rejected', async () => {
+  const r = await call('/timing?id=t3&from=bad&to=2026-10-23');
+  assert.strictEqual(r.code, 400);
+});

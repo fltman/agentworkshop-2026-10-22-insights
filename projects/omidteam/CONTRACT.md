@@ -50,3 +50,11 @@ already cached by a /timing call, so it is fast but can differ slightly from /ti
 { "date": "2026-10-22", "hour": 14, "source": "heuristic-model (...)",
   "results": [{ "id": "overture:abc", "crowd": 42, "level": "medium", "est_wait_minutes": 12, "open": true }] }
 ```
+
+## Embedding in the group app (additive)
+
+`/colony/omidteam/?embed=1&id=<id>&lat=&lng=&from=&to=&time=HH:MM` renders the full timing view (go/avoid, gauge, chart with scrubber, why-this-time, rain tip, heat map) without the form. It posts `{type:'omidteam-height', height}` to the parent when its size changes.
+
+Easiest: `<script src="/colony/omidteam/widget.js"></script>` then `OmidTiming.mount(container, {id, lat, lng, from, to, time})`. Call it again for the next restaurant; it reuses the iframe and keeps the height.
+
+Notes: `/now` silently ignores ids beyond the first 20 (it never errors for that). `/timing` returns 400 for a `from`/`to` that is present but not a valid date.
