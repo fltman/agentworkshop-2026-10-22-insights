@@ -106,7 +106,7 @@
     if (!p) return;
     const bad = p.reasons.length > 0;
     p.marker.setStyle({ color: bad ? '#8e1b1b' : '#1a4f9c', fillColor: bad ? '#e53935' : '#2a7fff' });
-    p.marker.setTooltipContent(p.r.name + (bad ? '\n' + p.reasons.join('\n') : ''));
+    p.marker.setTooltipContent(p.r.name + (p.crowd ? '\n' + p.crowd : '') + (bad ? '\n' + p.reasons.join('\n') : ''));
     if (p.button) { p.button.classList.toggle('bad', bad); p.button.title = p.reasons.join('; '); }
   }
   function setReason(id, key, text) {
@@ -160,7 +160,7 @@
         paintPin(r.id);
       });
       renderList(list);
-      addBadges(list.slice(0, 25), params);
+      addBadges(list.slice(0, 25), params); addCrowdNow(list);
       setStatus(list.length + ' restaurants found' + (data.fallback ? ' (fallback: ' + fallbackSource + '; discovery module unavailable)' : (data.source === 'Google Places' ? ' (Google Places)' : '')));
     } catch (e) {
       setStatus('Search failed: ' + e.message);
@@ -280,6 +280,20 @@
     });
   }
 
+  async function addCrowdNow(list) {
+    try {
+      const ids = list.filter((r) => /^[A-Za-z0-9:_\/.-]+$/.test(String(r.id))).slice(0, 20);
+      if (!ids.length) return;
+      const d = await getJson('/t/omidteam/now', { ids: ids.map((r) => r.id).join(','), lat: here.lat, lng: here.lng });
+      (d.results || []).forEach((x) => {
+        const p = pins.get(x.id);
+        if (!p) return;
+        p.crowd = 'Right now: ' + x.level + ' crowd' + (x.est_wait_minutes != null ? ', ~' + x.est_wait_minutes + ' min wait' : '');
+        paintPin(x.id);
+      });
+    } catch (e) { /* optional */ }
+  }
+
   async function addBadges(list, params) {
     await Promise.all(list.map(async (r) => {
       try {
@@ -349,7 +363,7 @@
       }
       if (d.source === 'mock') b.appendChild(el('div', 'Demo data', 'muted'));
       (d.offers || []).forEach((o) => b.appendChild(el('div', 'Offer: ' + o.title + (o.description ? ' - ' + o.description : ''))));
-      if (!b.children.length) b.appendChild(el('div', 'No menu or offers for these dates', 'muted'));
+      if (!b.children.length) b.appendChild(el('div', d.empty_message || 'No menu or offers for these dates', 'muted'));
     } catch (e) { unavailable('w-menu', e.message); }
   }
 
@@ -385,6 +399,9 @@
         ul.appendChild(el('li', [t.date, t.start && t.end ? t.start + '-' + t.end : t.hour, t.crowd ? '(' + t.crowd + ' crowd)' : '', t.est_wait_min != null ? '~' + t.est_wait_min + ' min wait' : ''].filter(Boolean).join(' ')));
       });
       b.appendChild(ul);
+      const wet = [];
+      (d.days || []).forEach((day) => (day.hours || []).forEach((h) => { if (h.rain_pct != null && h.rain_pct >= 60 && h.hour >= 8) wet.push(day.date + ' ' + String(h.hour).padStart(2, '0') + ':00'); }));
+      if (wet.length) b.appendChild(el('div', 'Rain likely: ' + wet.slice(0, 4).join(', ') + (wet.length > 4 ? ' ...' : ''), 'muted'));
       if (!ul.children.length) b.appendChild(el('div', 'No timing data', 'muted'));
     } catch (e) { unavailable('w-timing', e.message); }
   }

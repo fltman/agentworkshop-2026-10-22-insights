@@ -3,3 +3,4 @@
 2026-10-22 10:26 SPAWN: menus-api-service (need: backend endpoint implementing CONTRACT.md)
 2026-10-22 10:34 MUTATE: menu-offers-sources, menus-api-service energy 50->60 (both used in delivered PR #5)
 2026-10-22 10:34 SPAWN: menu-page-extractor (need: SSRF-safe fetching and dish/price extraction from restaurant websites, a distinct problem from OSM lookup)
+2026-10-22 12:42 MUTATE: menu-page-extractor now decodes HTML entities and explains empty menus (real scrape bug and 'why no menu' question came up twice)

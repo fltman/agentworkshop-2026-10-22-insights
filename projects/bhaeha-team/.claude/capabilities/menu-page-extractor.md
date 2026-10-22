@@ -35,3 +35,4 @@ Does not own the HTTP route (menus-api-service) or source choice (menu-offers-so
 ## Evolution History
 
 - 2026-10-22: Spawned after PR #5 evolve
+- 12:42 mutate: also decodes HTML entities and reports why a menu is empty (empty_reason).

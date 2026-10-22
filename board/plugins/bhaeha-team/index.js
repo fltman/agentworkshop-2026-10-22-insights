@@ -178,16 +178,26 @@ function extractItems(html) {
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(Math.min(parseInt(n, 16), 0x10ffff)))
     .replace(/&(nbsp|amp|quot|apos|lt|gt|aring|auml|ouml|Aring|Auml|Ouml|eacute|egrave);/g, (_, n) => ({ nbsp: ' ', amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', aring: 'å', auml: 'ä', ouml: 'ö', Aring: 'Å', Auml: 'Ä', Ouml: 'Ö', eacute: 'é', egrave: 'è' })[n]);
   const seen = new Set();
-  for (const raw of text.split('\n')) {
-    const line = raw.replace(/\s+/g, ' ').trim();
+  const lines = text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const cur = (str) => (/\$/.test(str) ? 'USD' : /£/.test(str) ? 'GBP' : /€|EUR/.test(str) ? 'EUR' : 'SEK');
+  const add = (name, price, line) => {
+    if (!name || !/[a-zA-ZÀ-ÿ]{3}/.test(name) || !price || seen.has(name)) return;
+    seen.add(name);
+    items.push({ name: name.slice(0, 80), price, currency: cur(line), tags: [], daily_special: false });
+  };
+  const priceOnly = /^(?:[€$£]\s?)?(\d{2,4}(?:[.,]\d{1,2})?)\s?(?:€|kr|SEK|EUR|:-|\$|£)$/i;
+  for (let i = 0; i < lines.length && items.length < 30; i++) {
+    const line = lines[i];
+    const po = priceOnly.exec(line);
+    if (po) {
+      // Name and price in separate elements: take the previous text line as the dish name.
+      const prev = lines[i - 1];
+      if (prev && prev.length >= 3 && prev.length <= 80 && !priceOnly.test(prev) && !/^\+/.test(line)) add(prev, Number(po[1].replace(',', '.')), line);
+      continue;
+    }
     const m = /^(.{3,80}?)[\s.:–-]+(?:[€$£]\s?)?(\d{1,4}(?:[.,]\d{1,2})?)\s?(?:€|kr|SEK|EUR|:-|\$|£)?$/.exec(line);
-    if (!m || !/[a-zA-ZÀ-ÿ]{3}/.test(m[1])) continue;
-    const price = Number(m[2].replace(',', '.'));
-    const hasCur = /[€$£]|kr|SEK|EUR|:-/.test(line);
-    if (!hasCur || !price || seen.has(m[1])) continue;
-    seen.add(m[1]);
-    items.push({ name: m[1].slice(0, 80), price, currency: /\$/.test(line) ? 'USD' : /£/.test(line) ? 'GBP' : /€|EUR/.test(line) ? 'EUR' : 'SEK', tags: [], daily_special: false });
-    if (items.length >= 30) break;
+    if (!m || !/[€$£]|kr|SEK|EUR|:-/.test(line)) continue;
+    add(m[1], Number(m[2].replace(',', '.')), line);
   }
   return items.length >= 3 ? items : [];
 }
