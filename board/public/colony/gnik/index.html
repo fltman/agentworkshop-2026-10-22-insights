@@ -53,6 +53,11 @@ function render(d, name) {
   const h = el('div', null, 'rest');
   h.append(el('div', name || d.name || 'Selected restaurant', 'n'));
   frag.append(h);
+  if (!d.review_count) {
+    const n = card('Reviews');
+    n.append(el('div', 'No reviews found for this restaurant yet.', null), el('div', 'We only show real review text, never made-up data.', 'muted'));
+    frag.append(n); out.replaceChildren(frag); return;
+  }
   const pen = d.red_flags.reduce((n, f) => n + (f.severity === 'high' ? 25 : f.severity === 'medium' ? 12 : 5), 0);
   const avg = d.suggested_meals.length ? d.suggested_meals.reduce((n, m) => n + m.sentiment, 0) / d.suggested_meals.length : 0.5;
   const score = Math.max(0, Math.min(100, Math.round(avg * 100 - pen)));
@@ -63,7 +68,7 @@ function render(d, name) {
   const txt = el('div');
   txt.append(el('div', score >= 70 ? 'Looks like a safe bet' : score >= 40 ? 'Mixed reviews, choose carefully' : 'Proceed with caution'));
   txt.append(el('div', d.review_count + ' reviews analysed', 'muted'));
-  txt.append(el('span', d.source === 'mock' ? 'demo data' : 'real reviews', 'tag'));
+  txt.append(el('span', d.source === 'mock' ? 'demo data' : d.source === 'website' ? 'from restaurant website' : 'real reviews', 'tag'));
   row.append(sc, txt); v.append(row); frag.append(v);
 
   const m = card('Order this');
