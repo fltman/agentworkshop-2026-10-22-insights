@@ -103,3 +103,44 @@ test('reports aggregate traffic without client identifiers', async () => {
   assert.ok(result.body.active.restaurants_recent >= 1);
   assert.equal(JSON.stringify(result.body).includes('127.0.0.1'), false);
 });
+
+test('uses the next provider when the first mirror is unavailable', async (t) => {
+  let unavailableCalls = 0;
+  const unavailable = http.createServer((request, response) => {
+    unavailableCalls += 1;
+    request.resume();
+    response.writeHead(502);
+    response.end();
+  });
+  const available = http.createServer((request, response) => {
+    request.resume();
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({
+      elements: [{
+        type: 'node',
+        id: 456,
+        lat: 59.33,
+        lon: 18.07,
+        tags: { name: 'Fallback Cafe' },
+      }],
+    }));
+  });
+  await Promise.all([
+    new Promise((resolve) => unavailable.listen(0, '127.0.0.1', resolve)),
+    new Promise((resolve) => available.listen(0, '127.0.0.1', resolve)),
+  ]);
+  const previousProvider = process.env.OVERPASS_URL;
+  process.env.OVERPASS_URL = `http://127.0.0.1:${unavailable.address().port},http://127.0.0.1:${available.address().port}`;
+  t.after(() => {
+    if (previousProvider === undefined) delete process.env.OVERPASS_URL;
+    else process.env.OVERPASS_URL = previousProvider;
+    unavailable.close();
+    available.close();
+  });
+
+  const result = await invoke('/search?lat=59.33&lng=18.07');
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.restaurants[0].restaurant_id, 'osm:node/456');
+  assert.equal(unavailableCalls, 1);
+});
