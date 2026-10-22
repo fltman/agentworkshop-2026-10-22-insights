@@ -126,7 +126,7 @@
     renderContact(r);
     const q = { id: r.id, restaurant_id: r.id, name: r.name, lat: r.lat, lng: r.lng };
     if (current.params) { q.from = current.params.from; q.to = current.params.to; q.maxWaitMinutes = current.params.max_wait_min; }
-    loadMenu(q); loadReviews(q); loadTiming(q);
+    loadMenu(q); loadReviews(q); loadTiming(Object.assign({ country: 'SE' }, q));
   }
 
   function renderContact(r) {
