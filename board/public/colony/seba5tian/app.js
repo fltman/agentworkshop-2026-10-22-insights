@@ -12,7 +12,7 @@
     discovery: { path: '/t/daniela/search' },
     timing: { path: '/t/omidteam/timing' },
     reviews: { path: '/t/gnik/reviews' },
-    menus: { path: null },
+    menus: { path: '/t/bhaeha-team/menu' },
   };
 
   const map = L.map('map').setView([59.3293, 18.0686], 14);
@@ -58,8 +58,10 @@
       const data = await getJson(modules.discovery.path, {
         lat: here.lat,
         lng: here.lng,
-        radiusMeters: (params.location && params.location.radius_m) || 1500,
-        cuisine: (params.cuisines || []).join(','),
+        radius_m: (params.location && params.location.radius_m) || 1500,
+        cuisines: (params.cuisines || []).join(','),
+        price_min: params.price_min || 1,
+        price_max: params.price_max || 4,
         limit: 50,
       });
       let list = (data.restaurants || data || []).map(normalize);
@@ -82,7 +84,7 @@
     current.restaurant = r;
     $('#d-name').textContent = r.name + (r.price ? '  ' + r.price : '');
     renderContact(r);
-    const q = { id: r.id, restaurant_id: r.id, lat: r.lat, lng: r.lng };
+    const q = { id: r.id, restaurant_id: r.id, name: r.name, lat: r.lat, lng: r.lng };
     if (current.params) { q.from = current.params.from; q.to = current.params.to; q.maxWaitMinutes = current.params.max_wait_min; }
     loadMenu(q); loadReviews(q); loadTiming(q);
   }
@@ -105,12 +107,16 @@
     try {
       const d = await getJson(modules.menus.path, q);
       const b = body('w-menu');
-      (d.menus || []).forEach((m) => {
+      (d.days || d.menus || []).forEach((m) => {
         b.appendChild(el('strong', m.date));
         const ul = el('ul');
-        (m.items || []).forEach((i) => ul.appendChild(el('li', i.name + (i.price != null ? ' - ' + i.price + ' ' + (i.currency || '') : ''))));
+        (m.items || []).forEach((i) => ul.appendChild(el('li', (i.daily_special ? '* ' : '') + i.name + (i.price != null ? ' - ' + i.price + ' ' + (i.currency || '') : ''))));
         b.appendChild(ul);
       });
+      if (d.menu_url && /^https?:\/\//i.test(d.menu_url)) {
+        const a = el('a', 'Menu link'); a.href = d.menu_url; a.target = '_blank'; a.rel = 'noopener'; b.appendChild(a);
+      }
+      if (d.source === 'mock') b.appendChild(el('div', 'Demo data', 'muted'));
       (d.offers || []).forEach((o) => b.appendChild(el('div', 'Offer: ' + o.title + (o.description ? ' - ' + o.description : ''))));
       if (!b.children.length) b.appendChild(el('div', 'No menu or offers for these dates', 'muted'));
     } catch (e) { unavailable('w-menu', e.message); }
@@ -124,7 +130,7 @@
       if ((d.suggested_meals || []).length) {
         b.appendChild(el('strong', 'Suggested meals'));
         const ul = el('ul');
-        d.suggested_meals.forEach((m) => ul.appendChild(el('li', m.name + (m.reason ? ' - ' + m.reason : ''))));
+        d.suggested_meals.forEach((m) => ul.appendChild(el('li', (m.dish || m.name) + (m.mentions ? ' (' + m.mentions + ' mentions)' : '') + (m.reason ? ' - ' + m.reason : ''))));
         b.appendChild(ul);
       }
       if ((d.red_flags || []).length) {

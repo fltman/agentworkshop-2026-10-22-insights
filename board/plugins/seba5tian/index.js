@@ -5,7 +5,7 @@ const MODULES = {
   discovery: { team: 'daniela', path: '/t/daniela/search' },
   timing: { team: 'omidteam', path: '/t/omidteam/timing' },
   reviews: { team: 'gnik', path: '/t/gnik/reviews' },
-  menus: { team: null, path: null },
+  menus: { team: 'bhaeha-team', path: '/t/bhaeha-team/menu' },
 };
 
 function json(res, status, body) {
