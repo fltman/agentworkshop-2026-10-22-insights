@@ -319,12 +319,26 @@
 
   function renderContact(r) {
     const b = body('w-contact');
-    [['Address', r.address], ['Phone', r.phone], ['Hours', r.hours]].forEach(([k, v]) => {
-      if (v) b.appendChild(el('div', k + ': ' + v));
-    });
+    const row = (icon, label, node) => {
+      const d = el('div', '', 'crow');
+      d.appendChild(el('span', icon, 'cicon'));
+      d.appendChild(el('span', label, 'clabel'));
+      node.classList.add('cval');
+      d.appendChild(node);
+      b.appendChild(d);
+    };
+    if (r.address) row('\uD83D\uDCCD', 'Address', el('span', r.address));
+    if (r.phone) {
+      const a = el('a', r.phone);
+      const tel = String(r.phone).replace(/[^\d+]/g, '');
+      if (tel) a.href = 'tel:' + tel;
+      row('\uD83D\uDCDE', 'Phone', a);
+    }
+    if (r.hours) row('\uD83D\uDD52', 'Hours', el('span', r.hours));
     if (r.website && /^https?:\/\//i.test(r.website)) {
-      const a = el('a', r.website); a.href = r.website; a.target = '_blank'; a.rel = 'noopener';
-      b.appendChild(a);
+      const a = el('a', r.website.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''));
+      a.href = r.website; a.target = '_blank'; a.rel = 'noopener';
+      row('\uD83C\uDF10', 'Web', a);
     }
     if (!b.children.length) b.appendChild(el('div', 'No contact info', 'muted'));
   }

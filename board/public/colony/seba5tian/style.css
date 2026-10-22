@@ -28,3 +28,7 @@ iframe.embed { width: 100%; height: 460px; border: 1px solid #eee; margin-top: 6
 .dot.red { background: #e53935; }
 .leaflet-tooltip { white-space: pre-line; max-width: 280px; }
 iframe.embed.tall { height: 620px; }
+.crow { display: flex; align-items: baseline; gap: 8px; padding: 6px 8px; margin-top: 4px; background: #f5f7fb; border-radius: 6px; font-size: 14px; }
+.cicon { flex: none; width: 20px; text-align: center; }
+.clabel { flex: none; width: 56px; font-weight: 700; }
+.cval { font-weight: 600; overflow-wrap: anywhere; }
