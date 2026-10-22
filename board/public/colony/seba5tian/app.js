@@ -136,15 +136,59 @@
     }).filter((x) => x.lat != null && x.lng != null && (!wanted.size || x.cuisines.some((c) => wanted.has(c.toLowerCase()))));
   }
 
-  // Fallback order: bhaeha-team bundled Overture data, then OSM directly, then labelled demo data.
+  // Fallback: merge bhaeha-team Overture data with OSM Nominatim (keyless, works when Overpass is down),
+  // then Overpass, then demo data. Nominatim allows 1 request per second, so queries run in sequence.
+  function bbox(radiusM) {
+    const dLat = radiusM / 111320;
+    const dLng = radiusM / (111320 * Math.cos(here.lat * Math.PI / 180));
+    return [here.lng - dLng, here.lat + dLat, here.lng + dLng, here.lat - dLat].map((n) => n.toFixed(5)).join(',');
+  }
+
+  async function nominatim(params) {
+    const box = bbox((params.location && params.location.radius_m) || 1500);
+    const found = [];
+    for (const term of ['restaurant', 'restaurang']) {
+      try {
+        const r = await fetch('https://nominatim.openstreetmap.org/search?' + new URLSearchParams({ q: term, format: 'jsonv2', limit: '40', bounded: '1', viewbox: box, extratags: '1' }), { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) continue;
+        (await r.json()).forEach((x) => {
+          const t = x.extratags || {};
+          found.push({
+            restaurant_id: 'osm:' + x.osm_type + '/' + x.osm_id,
+            name: x.name || x.display_name.split(',')[0],
+            lat: Number(x.lat), lng: Number(x.lon),
+            cuisines: t.cuisine ? t.cuisine.split(';') : [],
+            contact: { phone: t.phone || t['contact:phone'], website: t.website || t['contact:website'], opening_hours: t.opening_hours },
+          });
+        });
+      } catch (e) { /* next term */ }
+      await new Promise((ok) => setTimeout(ok, 1100));
+    }
+    return found;
+  }
+
+  function mergeSources(lists) {
+    const out = [];
+    const seen = new Set();
+    lists.flat().forEach((r) => {
+      const id = r.restaurant_id || r.id;
+      const key = String(r.name || '').toLowerCase().replace(/[^a-z0-9åäö]/g, '') + '|' + Number(r.lat).toFixed(3) + '|' + Number(r.lng).toFixed(3);
+      if (seen.has(id) || seen.has(key)) return;
+      seen.add(id); seen.add(key);
+      out.push(r);
+    });
+    return out;
+  }
+
   async function fallbackChain(params) {
-    try {
-      const d = await getJson('/t/bhaeha-team/restaurants', {
-        lat: here.lat, lng: here.lng, radius_m: (params.location && params.location.radius_m) || 1500,
-      });
-      if ((d.restaurants || []).length) { fallbackSource = 'bhaeha-team Overture data'; return d.restaurants; }
-    } catch (e) { /* next */ }
-    fallbackSource = 'OSM direct';
+    const radius = (params.location && params.location.radius_m) || 1500;
+    const [overture, osm] = await Promise.all([
+      getJson('/t/bhaeha-team/restaurants', { lat: here.lat, lng: here.lng, radius_m: radius }).then((d) => d.restaurants || []).catch(() => []),
+      nominatim(params),
+    ]);
+    const merged = mergeSources([osm, overture]);
+    if (merged.length) { fallbackSource = [osm.length && 'OSM Nominatim', overture.length && 'bhaeha-team Overture'].filter(Boolean).join(' + '); return merged; }
+    fallbackSource = 'OSM Overpass';
     return overpassFallback(params);
   }
 
