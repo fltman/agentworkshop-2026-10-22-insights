@@ -392,7 +392,7 @@
   function loadTiming(q) {
     const b = body('w-timing');
     if (!/^[A-Za-z0-9:_\/.-]+$/.test(String(q.id))) { b.appendChild(el('div', 'No timing data', 'muted')); return; }
-    const p = new URLSearchParams({ id: q.id, name: q.name || '' });
+    const p = new URLSearchParams({ id: q.id, name: q.name || '', embed: '1' });
     ['lat', 'lng', 'from', 'to', 'time'].forEach((k) => { if (q[k] != null && q[k] !== '') p.set(k, q[k]); });
     if (q.maxWaitMinutes) p.set('max_wait_min', q.maxWaitMinutes);
     const f = document.createElement('iframe');
