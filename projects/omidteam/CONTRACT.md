@@ -27,4 +27,10 @@
 
 Also: `GET /t/omidteam/health`. Frontend widget: `/colony/omidteam/?id=...&from=...&to=...` (embeddable).
 
+Optional extras (all additive, failures fall back silently):
+- `country=SE` (ISO 2-letter): public holidays via Nager.Date raise crowd slightly.
+- `lat`+`lng` with dates within ~16 days: Open-Meteo rain probability lowers crowd slightly.
+- `id` like `osm:node/123`: OSM opening_hours (hours get `open` true/false, closed hours have crowd 0) and amenity type.
+- `source` lists what was used, e.g. `osm+weather+holidays+heuristic-model`.
+
 Note: data is a heuristic model (meal peaks, weekday/weekend, per-restaurant bias), not real visitor data.

@@ -1,0 +1,5 @@
+# HIVE Evolution Log
+2026-10-22 10:26 SPAWN: menu-offers-sources (need: find and normalize menu/offer data for module 3)
+2026-10-22 10:26 SPAWN: menus-api-service (need: backend endpoint implementing CONTRACT.md)
+2026-10-22 10:34 MUTATE: menu-offers-sources, menus-api-service energy 50->60 (both used in delivered PR #5)
+2026-10-22 10:34 SPAWN: menu-page-extractor (need: SSRF-safe fetching and dish/price extraction from restaurant websites, a distinct problem from OSM lookup)

@@ -1,0 +1,74 @@
+# seba5tian CONTRACT (TableWise: map widget, detail widgets, integration)
+
+Status: DRAFT v0.1. Only seba5tian changes this file. Ask in #build.
+
+We run at `/colony/seba5tian/` (UI) and `/t/seba5tian/` (backend). The UI fans out to the other teams' modules and
+merges the results by `restaurant_id`.
+
+## Shared rules (all modules)
+
+- `restaurant_id`: string, stable, issued by discovery (daniela). Format `<source>:<id>`, e.g. `osm:node/123456`.
+- Coordinates: `lat`, `lng` as numbers (WGS84).
+- Dates: `YYYY-MM-DD`. Prices: `price_level` integer 1-4 (1 = cheap).
+- Every module answers JSON, GET or POST, and never returns HTML. Unknown data = `null` or `[]`, not an error.
+- Errors: HTTP 4xx/5xx with `{ "error": "message" }`.
+
+## 1. SearchParams (emitted by bhaeha-team's form + location picker)
+
+The form calls `window.TableWise.onSearch(params)` (the UI exposes it), or posts the same JSON to
+`POST /t/seba5tian/search`.
+
+```json
+{
+  "from": "2026-11-03",
+  "to": "2026-11-05",
+  "location": { "lat": 59.3293, "lng": 18.0686, "radius_m": 1500 },
+  "cuisines": ["italian", "vegetarian"],
+  "price_min": 1,
+  "price_max": 3,
+  "max_wait_min": 20,
+  "diet": ["vegetarian"]
+}
+```
+
+`cuisines`, `diet` optional (empty = any). `radius_m` optional (default 1500).
+
+## 2. Discovery (daniela) -> list of Restaurant
+
+We expect (daniela to confirm path):
+
+```json
+[{
+  "restaurant_id": "osm:node/123456",
+  "name": "Trattoria X",
+  "lat": 59.33, "lng": 18.07,
+  "cuisines": ["italian"],
+  "price_level": 2,
+  "rating": 4.4,
+  "contact": { "phone": "+46...", "website": "https://...", "address": "...", "opening_hours": "Mo-Su 11:00-22:00" }
+}]
+```
+
+## 3. Detail widgets (we call, per clicked restaurant)
+
+Each module serves one endpoint taking `restaurant_id`, `lat`, `lng`, `from`, `to`.
+
+| Widget | Owner | Expected response |
+|---|---|---|
+| Menu + offers | menus team (unclaimed) | `{ "menus": [{ "date": "2026-11-03", "items": [{ "name": "...", "price": 12.5, "currency": "EUR" }] }], "offers": [{ "date": "...", "title": "...", "description": "..." }] }` |
+| Reviews | gnik | `{ "suggested_meals": [{ "name": "...", "reason": "..." }], "red_flags": [{ "type": "wait_time\|hygiene\|dish\|other", "text": "...", "severity": 1 }] }` |
+| Visit timing | visit-time team (unclaimed) | `{ "best_times": [{ "date": "...", "start": "14:00", "end": "16:00", "crowd": "low" }], "avg_wait_min": 10 }` |
+| Contact | from Discovery | `contact` object above |
+
+The owning team publishes the real path in its own CONTRACT.md; we adapt to what they publish. A module that is
+down shows "not available" in its widget; the rest of the UI keeps working.
+
+## What we offer
+
+- `GET /t/seba5tian/health` -> `{ "ok": true }`
+- `GET /t/seba5tian/modules` -> `{ "modules": { discovery|timing|reviews|menus: { team, path } } }`, the endpoints the UI calls
+- UI: `window.TableWise.onSearch(params)` for the input form (a built-in fallback form works until bhaeha-team's ships).
+- The UI calls the other modules directly (same origin) and accepts both the shape above and each producer's own
+  published shape (e.g. daniela: `id`, `priceLevel`, `phone`, `website`, `openingHours`).
+- Currently wired: discovery `GET /t/daniela/search` (lat, lng, radiusMeters, cuisine, limit), timing
+  `GET /t/omidteam/timing` (id, lat, lng, from, to, maxWaitMinutes), reviews `/t/gnik/reviews` (guess, gnik to confirm).
