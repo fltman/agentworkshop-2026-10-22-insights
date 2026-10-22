@@ -6,7 +6,7 @@ main { display: grid; grid-template-columns: 2fr 1fr; grid-template-areas: "sear
 .card { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
 #search { grid-area: search; }
 #mapcard { grid-area: map; padding: 0; overflow: hidden; }
-#details { grid-area: details; max-height: 75vh; overflow: auto; }
+#details { grid-area: details; }
 #map { height: 70vh; min-height: 360px; }
 form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 label { display: flex; flex-direction: column; font-size: 12px; gap: 2px; }
@@ -23,7 +23,7 @@ ul { margin: 4px 0; padding-left: 18px; }
 #list { max-height: 20vh; overflow: auto; display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; }
 #list .item { background: #eee; color: #222; font-size: 12px; }
 .ok { color: #1a7f37; }
-iframe.embed { width: 100%; height: 320px; border: 1px solid #eee; margin-top: 6px; }
+iframe.embed { width: 100%; height: 460px; border: 1px solid #eee; margin-top: 6px; }
 #legend { margin-top: 4px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
 .dot.blue { background: #2a7fff; }

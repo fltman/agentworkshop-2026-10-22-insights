@@ -349,7 +349,7 @@
       }
       if (d.source === 'mock') b.appendChild(el('div', 'Demo data', 'muted'));
       (d.offers || []).forEach((o) => b.appendChild(el('div', 'Offer: ' + o.title + (o.description ? ' - ' + o.description : ''))));
-      if (!b.children.length) b.appendChild(el('div', 'No menu or offers for these dates', 'muted'));
+      if (!b.children.length) b.appendChild(el('div', d.empty_message || 'No menu or offers for these dates', 'muted'));
     } catch (e) { unavailable('w-menu', e.message); }
   }
 
@@ -385,6 +385,9 @@
         ul.appendChild(el('li', [t.date, t.start && t.end ? t.start + '-' + t.end : t.hour, t.crowd ? '(' + t.crowd + ' crowd)' : '', t.est_wait_min != null ? '~' + t.est_wait_min + ' min wait' : ''].filter(Boolean).join(' ')));
       });
       b.appendChild(ul);
+      const wet = [];
+      (d.days || []).forEach((day) => (day.hours || []).forEach((h) => { if (h.rain_pct != null && h.rain_pct >= 60 && h.hour >= 8) wet.push(day.date + ' ' + String(h.hour).padStart(2, '0') + ':00'); }));
+      if (wet.length) b.appendChild(el('div', 'Rain likely: ' + wet.slice(0, 4).join(', ') + (wet.length > 4 ? ' ...' : ''), 'muted'));
       if (!ul.children.length) b.appendChild(el('div', 'No timing data', 'muted'));
     } catch (e) { unavailable('w-timing', e.message); }
   }
