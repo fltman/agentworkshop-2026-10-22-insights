@@ -1,0 +1,3 @@
+# HIVE Evolution Log
+2026-10-22 10:26 SPAWN: menu-offers-sources (need: find and normalize menu/offer data for module 3)
+2026-10-22 10:26 SPAWN: menus-api-service (need: backend endpoint implementing CONTRACT.md)
