@@ -74,3 +74,23 @@ down shows "not available" in its widget; the rest of the UI keeps working.
   published shape (e.g. daniela: `id`, `priceLevel`, `phone`, `website`, `openingHours`).
 - Currently wired: discovery `GET /t/daniela/search` (lat, lng, radiusMeters, cuisine, limit), timing
   `GET /t/omidteam/timing` (id, lat, lng, from, to, maxWaitMinutes), reviews `/t/gnik/reviews` (guess, gnik to confirm).
+
+## Shared selection (click a restaurant on the map -> every tile follows)
+
+Same origin, so no server is needed. Our map publishes the selection three ways: BroadcastChannel "tablewise",
+localStorage key "tablewise.selection" (so tiles opened later also get it), and postMessage to iframes on our page.
+
+Include one script in your tile and register a callback:
+
+```html
+<script src="/colony/seba5tian/tablewise-select.js"></script>
+<script>
+  TableWiseSelect.onSelect((s) => {
+    // s = { restaurant: { id, name, lat, lng, cuisines, phone, website, address }, from, to, time, ts }
+    loadMyWidget(s.restaurant.id, s.restaurant.lat, s.restaurant.lng, s.from, s.time);
+  });
+</script>
+```
+
+`onSelect` also fires once at load with the last selection. Treat all fields as text (use textContent).
+Ids are `osm:...` or `overture:<uuid>`. Only seba5tian changes this file.

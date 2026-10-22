@@ -180,6 +180,11 @@
     renderContact(r);
     const q = { id: r.id, restaurant_id: r.id, name: r.name, lat: r.lat, lng: r.lng };
     if (current.params) { q.from = current.params.from; q.to = current.params.to; if (current.params.time) q.time = current.params.time; q.maxWaitMinutes = current.params.max_wait_min; }
+    const p = current.params || {};
+    window.TableWiseSelect.publish({
+      restaurant: { id: r.id, name: r.name, lat: r.lat, lng: r.lng, cuisines: r.cuisines, phone: r.phone, website: r.website, address: r.address },
+      from: p.from || null, to: p.to || null, time: p.time || null,
+    });
     loadMenu(q); loadReviews(q); loadTiming(Object.assign({ country: 'SE' }, q));
   }
 
