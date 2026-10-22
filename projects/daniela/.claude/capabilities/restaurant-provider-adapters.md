@@ -3,7 +3,7 @@ name: restaurant-provider-adapters
 type: capability
 domain: data
 tools: Read, Grep, Glob, Bash, Edit
-energy: 50
+energy: 60
 spawned: 2026-10-22
 can-merge-with: [restaurant-discovery]
 ---
