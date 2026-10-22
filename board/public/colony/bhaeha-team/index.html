@@ -91,7 +91,7 @@
       c.append(ul);
       out.append(c);
     }
-    if (!d.days.length && !d.offers.length) out.append(el('div', 'No menu items or offers found for this restaurant. The restaurant website may not publish a menu we can read.'));
+    if (!d.days.length && !d.offers.length) out.append(el('div', d.empty_message || 'No menu items or offers found for this restaurant.'));
   }
 
   const nearmsg = document.getElementById('nearmsg');

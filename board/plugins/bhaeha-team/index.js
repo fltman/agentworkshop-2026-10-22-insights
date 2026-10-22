@@ -174,8 +174,9 @@ function extractItems(html) {
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<\/(p|div|li|tr|h\d|br|td|dd|dt|span)>|<br\s*\/?>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&');
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Math.min(Number(n), 0x10ffff)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(Math.min(parseInt(n, 16), 0x10ffff)))
+    .replace(/&(nbsp|amp|quot|apos|lt|gt|aring|auml|ouml|Aring|Auml|Ouml|eacute|egrave);/g, (_, n) => ({ nbsp: ' ', amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', aring: 'å', auml: 'ä', ouml: 'ö', Aring: 'Å', Auml: 'Ä', Ouml: 'Ö', eacute: 'é', egrave: 'è' })[n]);
   const seen = new Set();
   for (const raw of text.split('\n')) {
     const line = raw.replace(/\s+/g, ' ').trim();
@@ -216,9 +217,12 @@ async function scrapeMenu(url) {
   const hit = pageCache.get(url);
   if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.items;
   let items = [];
+  let reason = 'site_unreachable';
   try {
     const page = await fetchHtml(url);
     if (page) {
+      reason = 'no_readable_menu';
+      if (/<a\s[^>]*href\s*=\s*["'][^"']*\.pdf(\?[^"']*)?["'][^>]*>/i.test(page.html) && /meny|menu|lunch|dagens/i.test(page.html)) reason = 'menu_is_pdf_or_image';
       items = extractItems(page.html);
       if (!items.length) {
         for (const link of menuLinks(page.html, page.url)) {
@@ -232,6 +236,7 @@ async function scrapeMenu(url) {
     console.error('[bhaeha-team] scrape:', err && err.message);
     items = [];
   }
+  if (!items.length) items.reason = reason;
   pageCache.set(url, { ts: Date.now(), items });
   return items;
 }
@@ -283,6 +288,16 @@ module.exports = {
       const out = tags ? fromOsm(id, from, to, tags) : { id, from: iso(from), to: iso(to), menu_url: null, days: [], offers: [], source: 'none', confidence: 0 };
       if (tags && tags._overture) Object.assign(out, { source: 'overture', name: tags.name, phone: tags.phone || null, address: tags.address || null });
       const items = out.menu_url || out.website ? await scrapeMenu(out.menu_url || out.website) : [];
+      if (!items.length) {
+        const reasons = {
+          no_website: 'This restaurant has no website listed in the open data, so there is no menu to read.',
+          site_unreachable: 'The restaurant website could not be reached.',
+          menu_is_pdf_or_image: 'The menu is published as a PDF or image, which we cannot read yet.',
+          no_readable_menu: 'The website has no menu with prices in readable text (often a JavaScript widget or delivery app).',
+        };
+        out.empty_reason = out.menu_url || out.website ? items.reason || 'no_readable_menu' : 'no_website';
+        out.empty_message = reasons[out.empty_reason];
+      }
       if (items.length) {
         for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86400000)) out.days.push({ date: iso(d), items });
         out.source = 'website';

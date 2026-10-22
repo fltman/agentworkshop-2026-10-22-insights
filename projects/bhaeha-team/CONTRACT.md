@@ -62,3 +62,7 @@ Real Stockholm restaurants from Overture Maps (open data, CDLA-Permissive-2.0), 
 Optional `live=1`: tries OpenStreetMap (Overpass mirrors in parallel, 4 s budget, 10 min cache) first and returns `source: "osm"` with ids `osm:<node|way|relation>:<n>`. If Overpass is down it silently returns the Overture list (`source: "overture"`). Without `live=1` the answer is always the fast bundled Overture list.
 
 Currency: prices are in SEK (Swedish kronor) by default. Scraped pages keep their own currency when a symbol like € or $ is found.
+
+## Why a menu is empty
+
+When `/menu` finds no items it adds `empty_reason` (`no_website`, `site_unreachable`, `menu_is_pdf_or_image`, `no_readable_menu`) and a human-readable `empty_message`. UIs can show `empty_message` instead of a generic "no menu".
