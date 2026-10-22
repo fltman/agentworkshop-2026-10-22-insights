@@ -3,7 +3,7 @@ include-custom-instructions: true
 name: live-prober
 description: Probes every TableWise module on the live board (discovery, menu, reviews, timing, our tile) with curl and reports which one is broken, with request, expected and got. Use PROACTIVELY whenever someone deploys or the map looks wrong.
 tools: Bash, Read, Grep
-model: sonnet
+model: claude-sonnet-5.5
 ---
 
 # Live Prober
