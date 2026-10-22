@@ -180,6 +180,11 @@
     renderContact(r);
     const q = { id: r.id, restaurant_id: r.id, name: r.name, lat: r.lat, lng: r.lng };
     if (current.params) { q.from = current.params.from; q.to = current.params.to; if (current.params.time) q.time = current.params.time; q.maxWaitMinutes = current.params.max_wait_min; }
+    const p = current.params || {};
+    window.TableWiseSelect.publish({
+      restaurant: { id: r.id, name: r.name, lat: r.lat, lng: r.lng, cuisines: r.cuisines, phone: r.phone, website: r.website, address: r.address },
+      from: p.from || null, to: p.to || null, time: p.time || null,
+    });
     loadMenu(q); loadReviews(q); loadTiming(Object.assign({ country: 'SE' }, q));
   }
 
@@ -216,6 +221,15 @@
     } catch (e) { unavailable('w-menu', e.message); }
   }
 
+  function embedReviews(b, q) {
+    if (!/^[A-Za-z0-9:_\/.-]+$/.test(String(q.id))) return;
+    const f = document.createElement('iframe');
+    f.src = '/colony/gnik/?id=' + encodeURIComponent(q.id);
+    f.className = 'embed';
+    f.loading = 'lazy';
+    b.appendChild(f);
+  }
+
   async function loadReviews(q) {
     body('w-reviews').appendChild(el('div', 'Loading...', 'muted'));
     try {
@@ -234,6 +248,7 @@
         b.appendChild(ul);
       }
       if (!b.children.length) b.appendChild(el('div', 'No review insights', 'muted'));
+      embedReviews(b, q);
     } catch (e) { unavailable('w-reviews', e.message); }
   }
 
@@ -242,6 +257,10 @@
     try {
       const d = await getJson(modules.timing.path, q);
       const b = body('w-timing');
+      if (d.requested && d.requested.verdict) {
+        const r = d.requested;
+        b.appendChild(el('div', 'At ' + r.time + ': ' + r.verdict + (r.est_wait_minutes != null ? ' (~' + r.est_wait_minutes + ' min wait)' : '') + (r.better_time ? ', better at ' + r.better_time : ''), r.verdict === 'good' ? 'ok' : 'flag'));
+      }
       if (d.avg_wait_min != null) b.appendChild(el('div', 'Average wait: ' + d.avg_wait_min + ' min'));
       const ul = el('ul');
       if (!(d.best_times || []).length && (d.days || []).length) {
@@ -289,6 +308,13 @@
   fetch('/t/seba5tian/modules').then((r) => r.json()).then((d) => {
     Object.keys(d.modules || {}).forEach((k) => { if (modules[k]) modules[k] = { path: d.modules[k].path }; });
   }).catch(() => {});
+
+  // Show something on open: today, 19:00, Stockholm center, 1.5 km.
+  (function autoload() {
+    const today = new Date().toISOString().slice(0, 10);
+    $('#form [name=date]').value = today;
+    search({ from: today, to: today, time: $('#form [name=time]').value || null, location: { lat: here.lat, lng: here.lng, radius_m: 1500 }, cuisines: [], price_min: 1, price_max: 4, max_wait_min: 20 });
+  })();
 
   window.TableWise = { onSearch: search, select };
 })();

@@ -50,7 +50,8 @@ button.go-btn{background:var(--acc);color:#fff;border-color:var(--acc);cursor:po
 <div class="card">
 <h1><i></i>Best time to visit</h1>
 <form id="f">
- <label>Demo restaurant<select id="demo"></select></label>
+ <label>Nearby restaurants<select id="demo"></select></label>
+ <button type="button" id="loc" class="go-btn" style="background:#fff;color:var(--acc)">Use my location</button>
  <label>Restaurant id<input name="id" value="demo:cafe-1" size="14"></label>
  <label>From<input name="from" type="date"></label>
  <label>To<input name="to" type="date"></label>
@@ -62,6 +63,7 @@ button.go-btn{background:var(--acc);color:#fff;border-color:var(--acc);cursor:po
 </form>
 </div>
 <div id="out"></div>
+<script src="/colony/seba5tian/tablewise-select.js"></script>
 <script>
 const f = document.getElementById('f'), out = document.getElementById('out');
 const today = new Date().toISOString().slice(0, 10);
@@ -75,12 +77,41 @@ const DEMO = [
   ['Demo Sushi Norrmalm', 'demo:sushi-4', 59.3326, 18.0649],
 ];
 const demo = document.getElementById('demo');
-demo.appendChild(new Option('Pick one...', ''));
-DEMO.forEach(d => demo.appendChild(new Option(d[0], d[1])));
+const place = { lat: 59.3293, lng: 18.0686 };
+let list = [];
+const num = v => (Number.isFinite(+v) ? +v : null);
+function normalize(j) {
+  const arr = Array.isArray(j) ? j : j && (j.restaurants || j.results || j.items || j.data) || [];
+  return arr.map(r => ({ id: r.id || r.restaurant_id, name: r.name || r.title, lat: num(r.lat != null ? r.lat : r.location && r.location.lat), lng: num(r.lng != null ? r.lng : r.location && (r.location.lng != null ? r.location.lng : r.location.lon)) }))
+    .filter(r => r.id && r.name).slice(0, 40);
+}
+async function tryGet(url) {
+  const r = await fetch(url, { signal: AbortSignal.timeout(9000) });
+  const j = await r.json(); const l = normalize(j);
+  if (!r.ok || !l.length) throw new Error('empty');
+  return l;
+}
+async function loadNearby() {
+  demo.textContent = ''; demo.appendChild(new Option('Loading restaurants...', ''));
+  const q = 'lat=' + place.lat + '&lng=' + place.lng + '&radius_m=1000';
+  try {
+    list = await Promise.any([tryGet('/t/daniela/search?' + q + '&limit=30'), tryGet('/t/bhaeha-team/restaurants?' + q)]);
+  } catch (e) {
+    list = DEMO.map(d => ({ id: d[1], name: d[0] + ' (demo)', lat: d[2], lng: d[3] }));
+  }
+  demo.textContent = '';
+  demo.appendChild(new Option('Pick one (' + list.length + ')...', ''));
+  list.forEach((r, i) => demo.appendChild(new Option(r.name, String(i))));
+}
 demo.addEventListener('change', () => {
-  const d = DEMO.find(x => x[1] === demo.value); if (!d) return;
-  f.elements.id.value = d[1]; f.elements.lat.value = d[2]; f.elements.lng.value = d[3]; run();
+  const r = list[+demo.value]; if (!r) return;
+  f.elements.id.value = r.id; f.elements.lat.value = r.lat != null ? r.lat : ''; f.elements.lng.value = r.lng != null ? r.lng : ''; run();
 });
+document.getElementById('loc').addEventListener('click', () => {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(p => { place.lat = p.coords.latitude; place.lng = p.coords.longitude; loadNearby(); }, () => {});
+});
+loadNearby();
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 const pad = n => String(n).padStart(2, '0');
 const win = t => t.length ? t[0].time + '-' + pad(+t[t.length - 1].time.slice(0, 2) + 1) + ':00' : null;
@@ -160,5 +191,17 @@ async function run() {
   } catch (e) { out.textContent = ''; out.appendChild(el('div', 'card msg', 'Timing is unavailable right now.')); }
 }
 f.addEventListener('submit', e => { e.preventDefault(); run(); });
-run();
+const isDate = v => /^\d{4}-\d{2}-\d{2}/.test(v || ''), isTime = v => /^\d{2}:\d{2}$/.test(v || '');
+let followed = false;
+function follow(s) {
+  const r = s.restaurant, e = f.elements;
+  e.id.value = r.id; e.lat.value = r.lat; e.lng.value = r.lng;
+  if (isDate(s.from)) e.from.value = s.from.slice(0, 10);
+  if (isDate(s.to)) e.to.value = s.to.slice(0, 10);
+  else if (isDate(s.from)) e.to.value = s.from.slice(0, 10);
+  if (isTime(s.time)) e.time.value = s.time;
+  followed = true; run();
+}
+if (window.TableWiseSelect) TableWiseSelect.onSelect(follow);
+if (!followed) run();
 </script></body></html>
