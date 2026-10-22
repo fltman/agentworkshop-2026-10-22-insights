@@ -107,7 +107,6 @@
     const bad = p.reasons.length > 0;
     p.marker.setStyle({ color: bad ? '#8e1b1b' : '#1a4f9c', fillColor: bad ? '#e53935' : '#2a7fff' });
     p.marker.setTooltipContent(p.r.name + (p.crowd ? '\n' + p.crowd : '') + (bad ? '\n' + p.reasons.join('\n') : ''));
-    if (p.button) { p.button.classList.toggle('bad', bad); p.button.title = p.reasons.join('; '); }
   }
   function setReason(id, key, text) {
     const p = pins.get(id);
@@ -154,12 +153,11 @@
       pins.clear();
       list.forEach((r) => {
         const marker = L.circleMarker([r.lat, r.lng], { radius: 8, weight: 2, fillOpacity: 0.85 }).addTo(markers).bindTooltip(r.name).on('click', () => select(r));
-        pins.set(r.id, { r, marker, reasons: [], why: new Map(), button: null });
+        pins.set(r.id, { r, marker, reasons: [], why: new Map() });
         const open = isOpenAt(r.hours, params.from, params.time);
         if (open === false) setReason(r.id, 'hours', 'Closed at ' + params.time + ' on ' + params.from + ' (opening hours: ' + r.hours + ')');
         paintPin(r.id);
       });
-      renderList(list);
       addBadges(list.slice(0, 25), params); addCrowdNow(list);
       setStatus(list.length + ' restaurants found' + (data.fallback ? ' (fallback: ' + fallbackSource + '; discovery module unavailable)' : (data.source === 'Google Places' ? ' (Google Places)' : '')));
     } catch (e) {
@@ -268,18 +266,6 @@
     return overpassFallback(params);
   }
 
-  function renderList(list) {
-    const box = $('#list');
-    box.replaceChildren();
-    list.forEach((r) => {
-      const b = el('button', r.name + (r.price ? '  ' + r.price : ''), 'item');
-      b.type = 'button';
-      b.addEventListener('click', () => { map.setView([r.lat, r.lng], 17); select(r); });
-      box.appendChild(b);
-      if (pins.get(r.id)) { pins.get(r.id).button = b; paintPin(r.id); }
-    });
-  }
-
   async function addCrowdNow(list) {
     try {
       const ids = list.filter((r) => /^[A-Za-z0-9:_\/.-]+$/.test(String(r.id))).slice(0, 20);
@@ -301,7 +287,6 @@
         if (params.time) q.time = params.time;
         if (params.max_wait_min) q.maxWaitMinutes = params.max_wait_min;
         const d = await getJson(modules.timing.path, q);
-        const p = pins.get(r.id);
         const req = d.requested;
         if (req) {
           if (req.open === false || req.verdict === 'closed') setReason(r.id, 'timing-open', 'Closed at ' + params.time + ' (timing module)');
@@ -310,8 +295,6 @@
             setReason(r.id, 'wait', 'Expected wait ~' + wait + ' min at ' + params.time + ' is above your maximum of ' + params.max_wait_min + ' min' + (req.better_time ? ' (better at ' + req.better_time + ')' : ''));
           }
         }
-        const t = (d.best_times || [])[0];
-        if (t && p && p.button) p.button.textContent += '  [best ' + t.start + (t.est_wait_min != null ? ', ~' + t.est_wait_min + ' min' : '') + ']';
       } catch (e) { /* badge is optional */ }
     }));
   }
@@ -336,12 +319,26 @@
 
   function renderContact(r) {
     const b = body('w-contact');
-    [['Address', r.address], ['Phone', r.phone], ['Hours', r.hours]].forEach(([k, v]) => {
-      if (v) b.appendChild(el('div', k + ': ' + v));
-    });
+    const row = (icon, label, node) => {
+      const d = el('div', '', 'crow');
+      d.appendChild(el('span', icon, 'cicon'));
+      d.appendChild(el('span', label, 'clabel'));
+      node.classList.add('cval');
+      d.appendChild(node);
+      b.appendChild(d);
+    };
+    if (r.address) row('\uD83D\uDCCD', 'Address', el('span', r.address));
+    if (r.phone) {
+      const a = el('a', r.phone);
+      const tel = String(r.phone).replace(/[^\d+]/g, '');
+      if (tel) a.href = 'tel:' + tel;
+      row('\uD83D\uDCDE', 'Phone', a);
+    }
+    if (r.hours) row('\uD83D\uDD52', 'Hours', el('span', r.hours));
     if (r.website && /^https?:\/\//i.test(r.website)) {
-      const a = el('a', r.website); a.href = r.website; a.target = '_blank'; a.rel = 'noopener';
-      b.appendChild(a);
+      const a = el('a', r.website.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''));
+      a.href = r.website; a.target = '_blank'; a.rel = 'noopener';
+      row('\uD83C\uDF10', 'Web', a);
     }
     if (!b.children.length) b.appendChild(el('div', 'No contact info', 'muted'));
   }
@@ -367,8 +364,24 @@
     } catch (e) { unavailable('w-menu', e.message); }
   }
 
-  function loadReviews(q) {
+  // Google places: hand their reviews to gnik's ingestion first so the embedded analysis has real text.
+  async function ingestGoogleReviews(q, b) {
+    try {
+      const g = await getJson('/t/seba5tian/google-reviews', { id: q.id });
+      if (g.rating != null) b.appendChild(el('div', 'Google rating: ' + g.rating + (g.user_rating_count ? ' (' + g.user_rating_count + ' ratings)' : ''), 'muted'));
+      const texts = (g.reviews || []).map((x) => x.text);
+      if (texts.length) {
+        await fetch('/t/gnik/reviews?id=' + encodeURIComponent(q.id), {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ reviews: texts }), signal: AbortSignal.timeout(6000),
+        });
+      }
+    } catch (e) { /* not configured or unavailable: gnik falls back to its own sources */ }
+  }
+
+  async function loadReviews(q) {
     const b = body('w-reviews');
+    if (String(q.id).startsWith('google:')) await ingestGoogleReviews(q, b);
     if (!/^[A-Za-z0-9:_\/.-]+$/.test(String(q.id))) { b.appendChild(el('div', 'No reviews found', 'muted')); return; }
     const f = document.createElement('iframe');
     f.src = '/colony/gnik/?id=' + encodeURIComponent(q.id) + '&name=' + encodeURIComponent(q.name || '');
@@ -376,34 +389,17 @@
     b.appendChild(f);
   }
 
-  async function loadTiming(q) {
-    body('w-timing').appendChild(el('div', 'Loading...', 'muted'));
-    try {
-      const d = await getJson(modules.timing.path, q);
-      const b = body('w-timing');
-      if (d.requested && d.requested.verdict) {
-        const r = d.requested;
-        b.appendChild(el('div', 'At ' + r.time + ': ' + r.verdict + (r.est_wait_minutes != null ? ' (~' + r.est_wait_minutes + ' min wait)' : '') + (r.better_time ? ', better at ' + r.better_time : ''), r.verdict === 'good' ? 'ok' : 'flag'));
-      }
-      if (d.avg_wait_min != null) b.appendChild(el('div', 'Average wait: ' + d.avg_wait_min + ' min'));
-      const ul = el('ul');
-      if (!(d.best_times || []).length && (d.days || []).length) {
-        d.days.forEach((day) => {
-          const open = (day.hours || []).filter((h) => h.open !== false && h.crowd != null);
-          if (!open.length) return;
-          const best = open.reduce((a, h) => (h.crowd < a.crowd ? h : a));
-          ul.appendChild(el('li', day.date + ' around ' + best.hour + ':00 (' + (best.level || best.crowd) + ' crowd, ~' + best.est_wait_minutes + ' min wait)'));
-        });
-      }
-      (d.best_times || []).forEach((t) => {
-        ul.appendChild(el('li', [t.date, t.start && t.end ? t.start + '-' + t.end : t.hour, t.crowd ? '(' + t.crowd + ' crowd)' : '', t.est_wait_min != null ? '~' + t.est_wait_min + ' min wait' : ''].filter(Boolean).join(' ')));
-      });
-      b.appendChild(ul);
-      const wet = [];
-      (d.days || []).forEach((day) => (day.hours || []).forEach((h) => { if (h.rain_pct != null && h.rain_pct >= 60 && h.hour >= 8) wet.push(day.date + ' ' + String(h.hour).padStart(2, '0') + ':00'); }));
-      if (wet.length) b.appendChild(el('div', 'Rain likely: ' + wet.slice(0, 4).join(', ') + (wet.length > 4 ? ' ...' : ''), 'muted'));
-      if (!ul.children.length) b.appendChild(el('div', 'No timing data', 'muted'));
-    } catch (e) { unavailable('w-timing', e.message); }
+  function loadTiming(q) {
+    const b = body('w-timing');
+    if (!/^[A-Za-z0-9:_\/.-]+$/.test(String(q.id))) { b.appendChild(el('div', 'No timing data', 'muted')); return; }
+    const p = new URLSearchParams({ id: q.id, name: q.name || '', embed: '1' });
+    ['lat', 'lng', 'from', 'to', 'time'].forEach((k) => { if (q[k] != null && q[k] !== '') p.set(k, q[k]); });
+    if (q.maxWaitMinutes) p.set('max_wait_min', q.maxWaitMinutes);
+    const f = document.createElement('iframe');
+    f.src = '/colony/omidteam/?' + p;
+    f.className = 'embed tall';
+    f.title = 'Best time to visit';
+    b.appendChild(f);
   }
 
   $('#form').addEventListener('submit', (ev) => {
@@ -436,10 +432,15 @@
     Object.keys(d.modules || {}).forEach((k) => { if (modules[k]) modules[k] = { path: d.modules[k].path }; });
   }).catch(() => {});
 
-  // Show something on open: today, 19:00, Stockholm center, 1.5 km.
+  // Show something on open: next full hour today (local time), Stockholm center, 1.5 km.
   (function autoload() {
-    const today = new Date().toISOString().slice(0, 10);
+    const next = new Date();
+    next.setMinutes(0, 0, 0);
+    next.setHours(next.getHours() + 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    const today = next.getFullYear() + '-' + pad(next.getMonth() + 1) + '-' + pad(next.getDate());
     $('#form [name=date]').value = today;
+    $('#form [name=time]').value = pad(next.getHours()) + ':00';
     search({ from: today, to: today, time: $('#form [name=time]').value || null, location: { lat: here.lat, lng: here.lng, radius_m: 1500 }, cuisines: [], price_min: 1, price_max: 4, max_wait_min: 20 });
   })();
 

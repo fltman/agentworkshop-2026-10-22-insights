@@ -142,4 +142,41 @@ async function handlePlaces(req, res, json) {
   }
 }
 
-module.exports = { handlePlaces, openingHours, normalize, circles };
+// Up to 5 reviews per place from Place Details. Cached for an hour to stay inside the quota.
+const reviewCache = new Map();
+async function handleReviews(req, res, json) {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key) return json(res, 503, { configured: false, error: 'GOOGLE_PLACES_API_KEY is not set on the server' });
+  const id = new URL(req.url, 'http://localhost').searchParams.get('id') || '';
+  const m = /^(?:google:)?([A-Za-z0-9_-]{10,200})$/.exec(id);
+  if (!m) return json(res, 400, { error: 'id must be a Google place id (google:<id>)' });
+  const hit = reviewCache.get(m[1]);
+  if (hit && hit.expires > Date.now()) return json(res, 200, hit.body);
+  if (!allowed()) return json(res, 429, { error: 'too many requests, try again in a minute' });
+  try {
+    const r = await fetch('https://places.googleapis.com/v1/places/' + m[1], {
+      headers: { 'x-goog-api-key': key, 'x-goog-fieldmask': 'id,rating,userRatingCount,reviews' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) throw new Error('google places returned ' + r.status);
+    const d = await r.json();
+    const body = {
+      id: 'google:' + m[1],
+      rating: d.rating == null ? null : d.rating,
+      user_rating_count: d.userRatingCount == null ? null : d.userRatingCount,
+      reviews: (d.reviews || []).map((x) => ({
+        text: String((x.text && x.text.text) || (x.originalText && x.originalText.text) || '').slice(0, 1000),
+        rating: x.rating == null ? null : x.rating,
+        published: x.relativePublishTimeDescription || null,
+      })).filter((x) => x.text),
+      source: 'google-places',
+      attribution: 'Reviews from Google',
+    };
+    reviewCache.set(m[1], { expires: Date.now() + 3600000, body });
+    return json(res, 200, body);
+  } catch (e) {
+    return json(res, 502, { error: String(e && e.message ? e.message : 'unexpected error').replace(key, '***') });
+  }
+}
+
+module.exports = { handleReviews, handlePlaces, openingHours, normalize, circles };

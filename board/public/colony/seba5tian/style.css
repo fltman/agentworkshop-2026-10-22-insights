@@ -20,13 +20,15 @@ button#locate { background: #555; }
 .flag { color: #a00; }
 ul { margin: 4px 0; padding-left: 18px; }
 @media (max-width: 800px) { main { grid-template-columns: 1fr; grid-template-areas: "search" "map" "details"; } }
-#list { max-height: 20vh; overflow: auto; display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; }
-#list .item { background: #eee; color: #222; font-size: 12px; }
 .ok { color: #1a7f37; }
 iframe.embed { width: 100%; height: 460px; border: 1px solid #eee; margin-top: 6px; }
 #legend { margin-top: 4px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
 .dot.blue { background: #2a7fff; }
 .dot.red { background: #e53935; }
-#list .item.bad { background: #fde2e1; color: #8e1b1b; }
 .leaflet-tooltip { white-space: pre-line; max-width: 280px; }
+iframe.embed.tall { height: 620px; }
+.crow { display: flex; align-items: baseline; gap: 8px; padding: 6px 8px; margin-top: 4px; background: #f5f7fb; border-radius: 6px; font-size: 14px; }
+.cicon { flex: none; width: 20px; text-align: center; }
+.clabel { flex: none; width: 56px; font-weight: 700; }
+.cval { font-weight: 600; overflow-wrap: anywhere; }
