@@ -51,7 +51,7 @@ function card(title) { const c = el('div', null, 'card'); c.append(el('h3', titl
 function render(d, name) {
   const frag = document.createDocumentFragment();
   const h = el('div', null, 'rest');
-  h.append(el('div', name || d.name || 'Selected restaurant', 'n'), el('div', 'id: ' + d.id, 'i'));
+  h.append(el('div', name || d.name || 'Selected restaurant', 'n'));
   frag.append(h);
   const pen = d.red_flags.reduce((n, f) => n + (f.severity === 'high' ? 25 : f.severity === 'medium' ? 12 : 5), 0);
   const avg = d.suggested_meals.length ? d.suggested_meals.reduce((n, m) => n + m.sentiment, 0) / d.suggested_meals.length : 0.5;
@@ -109,7 +109,7 @@ document.getElementById('f').addEventListener('submit', (e) => {
 });
 const params = new URLSearchParams(location.search);
 const q = params.get('id') || params.get('restaurant_id');
-if (q) { document.getElementById('id').value = q; load(q, params.get('name') || ''); }
+if (q) { document.getElementById('f').hidden = true; document.getElementById('chips').hidden = true; document.getElementById('id').value = q; load(q, params.get('name') || ''); }
 </script>
 </body>
 </html>
