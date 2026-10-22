@@ -32,6 +32,13 @@
   <label>Demo data<input name="demo" type="checkbox"></label>
   <button>Fetch</button>
 </form>
+<div class="card">
+  <h2>Nearby restaurants (live from OpenStreetMap)</h2>
+  <button type="button" id="loc">Use my location</button>
+  <button type="button" id="near">Find nearby</button>
+  <span id="nearmsg"></span>
+  <ul id="list"></ul>
+</div>
 <div id="out"></div>
 <script>
   const f = document.getElementById('f');
@@ -80,6 +87,63 @@
     }
     if (!d.days.length && !d.offers.length) out.append(el('div', 'No menu items or offers found for this restaurant. Try demo data.'));
   }
+
+  const MIRRORS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+  ];
+  const nearmsg = document.getElementById('nearmsg');
+  const list = document.getElementById('list');
+
+  async function overpass(query) {
+    for (const url of MIRRORS) {
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: 'data=' + encodeURIComponent(query),
+          signal: AbortSignal.timeout(12000),
+        });
+        if (r.ok) return await r.json();
+      } catch (err) { /* try the next mirror */ }
+    }
+    throw new Error('All Overpass servers failed');
+  }
+
+  document.getElementById('loc').addEventListener('click', () => {
+    if (!navigator.geolocation) { nearmsg.textContent = ' Geolocation not supported'; return; }
+    navigator.geolocation.getCurrentPosition(
+      (p) => { f.lat.value = p.coords.latitude.toFixed(5); f.lng.value = p.coords.longitude.toFixed(5); nearmsg.textContent = ' Location set'; },
+      () => { nearmsg.textContent = ' Location denied, type lat/lng instead'; }
+    );
+  });
+
+  document.getElementById('near').addEventListener('click', async () => {
+    const lat = Number(f.lat.value), lng = Number(f.lng.value);
+    if (!isFinite(lat) || !isFinite(lng)) { nearmsg.textContent = ' Enter valid lat/lng'; return; }
+    nearmsg.textContent = ' Searching...';
+    list.replaceChildren();
+    try {
+      const j = await overpass('[out:json][timeout:15];nwr(around:600,' + lat + ',' + lng + ')["amenity"="restaurant"]["name"];out center tags 25;');
+      nearmsg.textContent = ' ' + j.elements.length + ' found';
+      for (const e of j.elements) {
+        const li = el('li');
+        const b = el('button', e.tags.name + (e.tags.cuisine ? ' (' + e.tags.cuisine + ')' : ''));
+        b.type = 'button';
+        b.addEventListener('click', () => {
+          f.elements.id.value = 'osm:' + e.type + ':' + e.id;
+          const c = e.center || e;
+          if (c.lat != null) { f.lat.value = c.lat; f.lng.value = c.lon; }
+          f.requestSubmit();
+        });
+        li.append(b);
+        list.append(li);
+      }
+    } catch (err) {
+      nearmsg.textContent = ' Could not reach OpenStreetMap, try again in a minute';
+    }
+  });
 
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
