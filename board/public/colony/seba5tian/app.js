@@ -435,10 +435,15 @@
     Object.keys(d.modules || {}).forEach((k) => { if (modules[k]) modules[k] = { path: d.modules[k].path }; });
   }).catch(() => {});
 
-  // Show something on open: today, 19:00, Stockholm center, 1.5 km.
+  // Show something on open: next full hour today (local time), Stockholm center, 1.5 km.
   (function autoload() {
-    const today = new Date().toISOString().slice(0, 10);
+    const next = new Date();
+    next.setMinutes(0, 0, 0);
+    next.setHours(next.getHours() + 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    const today = next.getFullYear() + '-' + pad(next.getMonth() + 1) + '-' + pad(next.getDate());
     $('#form [name=date]').value = today;
+    $('#form [name=time]').value = pad(next.getHours()) + ':00';
     search({ from: today, to: today, time: $('#form [name=time]').value || null, location: { lat: here.lat, lng: here.lng, radius_m: 1500 }, cuisines: [], price_min: 1, price_max: 4, max_wait_min: 20 });
   })();
 
