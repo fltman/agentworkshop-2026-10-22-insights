@@ -1,0 +1,2 @@
+# FLUX Evolution Log
+2026-10-22 12:19 EXPLORE: live-smoke "TableWise cross-module verification" (three approaches: browser automation, endpoint smoke runner, static checklist; selected endpoint smoke runner for dependency-free repeatability)

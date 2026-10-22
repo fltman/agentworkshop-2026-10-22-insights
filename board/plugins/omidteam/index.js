@@ -40,6 +40,7 @@ function parseDate(s) {
 
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const tagCache = new Map();
+let lastOverpass = null;
 
 // Fetch OSM tags for osm:node/N ids. Never throws; null means unknown.
 async function osmTags(id) {
@@ -59,6 +60,7 @@ async function osmTags(id) {
       if (r.ok) { const j = await r.json(); tags = (j.elements && j.elements[0] && j.elements[0].tags) || {}; break; }
     } catch (e) { console.error('[omidteam] overpass', e && e.message); }
   }
+  lastOverpass = { ok: !!tags, at: new Date().toISOString() };
   tagCache.set(id, { t: tags ? Date.now() : Date.now() - 3600e3 + 120e3, tags });
   return tags;
 }
@@ -121,6 +123,20 @@ async function holidays(country, year) {
 
 const AMENITY_KIND = { cafe: 'cafe', bar: 'bar', pub: 'bar', fast_food: 'fast' };
 
+function dayFactors(d, hours, o) {
+  const f = ['lunch peak 12-14', 'dinner peak 18-21'];
+  const dow = d.getUTCDay();
+  if (dow === 0 || dow === 6) f.push('weekend');
+  if (o.holiday) f.push('public holiday');
+  const wet = hours.filter(h => h.rain_pct != null && h.rain_pct >= 60);
+  if (wet.length) f.push('rain expected ' + String(wet[0].hour).padStart(2, '0') + ':00-' + String(wet[wet.length - 1].hour + 1).padStart(2, '0') + ':00');
+  if (o.amen === 'cafe') f.push('cafe: morning rush');
+  if (o.amen === 'bar') f.push('bar: late evening');
+  if (o.amen === 'fast') f.push('fast food: shorter waits');
+  if (o.hasHours) f.push('opening hours from OpenStreetMap');
+  return f;
+}
+
 function compute(q, tags, wx, hol) {
   const id = String(q.id || '').slice(0, 100);
   if (!id) return { error: 'id is required' };
@@ -147,7 +163,7 @@ function compute(q, tags, wx, hol) {
       if (hol && hol.has(d.toISOString().slice(0, 10))) c = Math.min(100, Math.round(c * 1.12));
       const closed = isOpen ? !isOpen(d.getUTCDay(), h) : false;
       if (closed) c = 0;
-      return { hour: h, crowd: c, level: level(c), est_wait_minutes: waitMin(c), open: !closed };
+      return { hour: h, crowd: c, level: level(c), est_wait_minutes: waitMin(c), open: !closed, rain_pct: Number.isFinite(rain) ? rain : null };
     });
     const inMeal = h => meal === 'lunch' ? h >= 11 && h <= 15 : meal === 'dinner' ? h >= 17 && h <= 22 : (h >= 11 && h <= 15) || (h >= 17 && h <= 22);
     const cands = hours.filter(x => inMeal(x.hour) && x.open);
@@ -166,6 +182,7 @@ function compute(q, tags, wx, hol) {
     const busiest = hours.slice().sort((a, b) => b.crowd - a.crowd)[0];
     out.push({
       date: d.toISOString().slice(0, 10),
+      factors: dayFactors(d, hours, { amen, hasHours: !!isOpen, holiday: !!(hol && hol.has(d.toISOString().slice(0, 10))) }),
       hours,
       best_times: best,
       busiest: { time: String(busiest.hour).padStart(2, '0') + ':00', crowd: busiest.crowd },
@@ -203,7 +220,7 @@ module.exports = {
   async handle(req, res, ctx) {
     const u = new URL(req.url, 'http://x');
     const p = ctx.path.replace(/^\/+|\/+$/g, '');
-    if (p === 'health') return send(res, 200, { ok: true, module: 'visit-timing' }), true;
+    if (p === 'health') return send(res, 200, { ok: true, module: 'visit-timing', opening_hours_cache: { entries: tagCache.size, last_lookup: lastOverpass } }), true;
     if (p === 'timing') {
       const q = Object.fromEntries(u.searchParams);
       const from = parseDate(q.from) || new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
@@ -217,6 +234,21 @@ module.exports = {
       ]);
       const r = compute(q, tags, wx, hol);
       return send(res, r.error ? 400 : 200, r), true;
+    }
+    if (p === 'now') {
+      const ids = String(u.searchParams.get('ids') || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 20);
+      if (!ids.length) return send(res, 400, { error: 'ids is required (comma separated, max 20)' }), true;
+      const now = new Date(), tz = { timeZone: 'Europe/Stockholm' };
+      const date = parseDate(u.searchParams.get('date')) ? u.searchParams.get('date') : now.toLocaleDateString('en-CA', tz);
+      const tm = /^(\d{1,2}):\d{2}$/.exec(u.searchParams.get('time') || '');
+      const hour = Math.min(23, Math.max(8, tm ? +tm[1] : +now.toLocaleTimeString('en-GB', Object.assign({ hour: '2-digit', hour12: false }, tz)) % 24));
+      const results = ids.map(id => {
+        const hit = tagCache.get(id);
+        const r = compute({ id, from: date, to: date }, hit && hit.tags, null, null);
+        const h = r.days[0].hours.find(x => x.hour === hour);
+        return { id, crowd: h.crowd, level: h.level, est_wait_minutes: h.est_wait_minutes, open: h.open };
+      });
+      return send(res, 200, { date, hour, source: 'heuristic-model (cached opening hours only; /timing adds weather and holidays)', results }), true;
     }
     return false;
   },

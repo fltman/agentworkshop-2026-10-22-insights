@@ -14,6 +14,48 @@ input,select,button{font:inherit;padding:6px 8px;border:1px solid var(--line);bo
 button.go-btn{background:var(--acc);color:#fff;border-color:var(--acc);cursor:pointer;align-self:flex-end;font-weight:600}
 .hero{display:flex;gap:12px;flex-wrap:wrap}
 .tile{flex:1 1 200px;border-radius:12px;padding:12px 14px;border:1px solid var(--line)}
+.near-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;margin-top:6px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;transition:transform .15s,box-shadow .15s;animation:rise .45s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*70ms)}
+.near-row:hover{transform:translateX(3px);box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.near-row b{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.near-row small{color:var(--mut);font-size:11px}
+.near-row i{width:10px;height:10px;border-radius:50%;flex:none}
+.rain{margin-top:8px;padding:6px 10px;border-radius:8px;background:#eef4fb;color:#2b5d8c;font-size:12px}
+.gsvg{display:block;width:100%;max-width:170px;margin:2px auto 0;overflow:visible}
+.gtrack,.garc{fill:none;stroke-width:10;stroke-linecap:round}
+.gtrack{stroke:var(--line)}
+.garc{transition:stroke-dasharray 1s cubic-bezier(.2,.9,.3,1)}
+.g-low{stroke:var(--low)}.g-medium{stroke:var(--mid)}.g-high{stroke:var(--high)}.g-closed{stroke:var(--closed)}
+.gneedle{stroke:var(--ink);stroke-width:2.5;stroke-linecap:round;transition:transform 1.1s cubic-bezier(.3,1.5,.4,1)}
+.ghub{fill:var(--ink)}
+.tile.gauge{text-align:center;background:#fff}
+.tile.gauge b{margin-top:0}
+.spark{width:84px;height:24px;flex:none;overflow:visible}
+.spark polyline{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1s ease forwards;animation-delay:calc(var(--i,0)*70ms + 200ms)}
+.spark circle{stroke:#fff;stroke-width:1.5}
+.sp-low{stroke:var(--low);fill:var(--low)}.sp-medium{stroke:var(--mid);fill:var(--mid)}.sp-high{stroke:var(--high);fill:var(--high)}
+@keyframes draw{to{stroke-dashoffset:0}}
+.nearhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.nearhead select{padding:3px 6px;font-size:12px}
+:root{color-scheme:light dark}
+@media (prefers-color-scheme:dark){
+:root{--bg:#14161a;--card:#1e2126;--ink:#e8eaed;--mut:#9aa3ad;--line:#343a42;--acc:#e0584a;--closed:#3a3f46}
+body{background:var(--bg)}body .card{box-shadow:0 1px 3px rgba(0,0,0,.5)}
+body input,body select,body .tab,body .near-row,body .tile.gauge{background:#262a30;color:var(--ink)}
+body .tab.on{background:var(--acc);color:#fff}
+body #loc{background:transparent!important}
+body .go,body .you.good{background:#16322e;border-color:#235a52}body .go b,body .you.good b{color:#6fd3c4}
+body .avoid,body .you.busy,body .you.closed{background:#3a1f1a;border-color:#6b3329}body .avoid b,body .you.busy b,body .you.closed b{color:#ff9a80}
+body .tile.gauge{background:var(--card)}
+body .rain{background:#1a2a3a;color:#8fbbe8}
+body .why{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:11px;color:var(--mut)}
+.why span{border:1px solid var(--line);border-radius:999px;padding:2px 8px;animation:pop .35s both;animation-delay:calc(var(--i,0)*50ms)}
+.compact #formcard,.compact #near,.compact .heatcard,.compact .copyrow,.compact .legend,.compact .src,.compact .why,.compact .rain{display:none}
+.compact body{padding:6px}.compact #out .card:nth-child(n+2){display:none}
+.chip{background:#16322e;border-color:#235a52;color:#6fd3c4}
+body .closed{background:repeating-linear-gradient(45deg,var(--closed),var(--closed) 4px,#2c3036 4px,#2c3036 8px)}
+body .skel{background:linear-gradient(90deg,#2a2e34 25%,#343a42 37%,#2a2e34 63%);background-size:400px 100%}
+body .spark circle{stroke:var(--card)}
+}
 .chip{margin-left:auto;font-size:11px;font-weight:600;color:#1b7a6e;background:#e8f6f3;border:1px solid #bfe5df;border-radius:999px;padding:2px 10px;animation:pop .4s both;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tile small{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
 .tile b{display:block;font-size:22px;margin:2px 0}
@@ -72,7 +114,7 @@ h1 i{animation:pulse 1.8s ease-out infinite}
 .skel{height:14px;border-radius:7px;margin:10px 0;background:linear-gradient(90deg,#eee 25%,#f8f8f6 37%,#eee 63%);background-size:400px 100%;animation:sheen 1.1s linear infinite}
 @media (prefers-reduced-motion:reduce){html:not(.force) *,html:not(.force) *::before,html:not(.force) *::after{animation:none!important;transition:none!important}}
 </style></head><body>
-<div class="card">
+<div class="card" id="formcard">
 <h1><i></i>Best time to visit<span id="chip" class="chip" hidden></span></h1>
 <form id="f">
  <label>Nearby restaurants<select id="demo"></select></label>
@@ -88,6 +130,7 @@ h1 i{animation:pulse 1.8s ease-out infinite}
 </form>
 </div>
 <div id="out"></div>
+<div id="near"></div>
 <script src="/colony/seba5tian/tablewise-select.js"></script>
 <script>
 const f = document.getElementById('f'), out = document.getElementById('out');
@@ -133,6 +176,7 @@ async function loadNearby() {
   demo.appendChild(new Option('Pick one (' + list.length + ')...', ''));
   list.forEach((r, i) => demo.appendChild(new Option(r.name, String(i))));
   if (!f.elements.id.value && !followed) { demo.value = '0'; demo.dispatchEvent(new Event('change')); }
+  if (!compact) rankNearby();
 }
 demo.addEventListener('change', () => {
   const r = list[+demo.value]; if (!r) return;
@@ -143,12 +187,76 @@ document.getElementById('loc').addEventListener('click', () => {
   navigator.geolocation.getCurrentPosition(p => { place.lat = p.coords.latitude; place.lng = p.coords.longitude; loadNearby(); }, () => {});
 });
 loadNearby();
+const svgEl = (t, a) => { const e = document.createElementNS('http://www.w3.org/2000/svg', t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+const localDate = () => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); };
+function spark(hours, nowH, level) {
+  const w = 84, hh = 24, n = hours.length - 1;
+  const pt = (x, i) => [(i * w / n).toFixed(1), (hh - 2 - x.crowd / 100 * (hh - 4)).toFixed(1)];
+  const svg = svgEl('svg', { viewBox: '0 0 ' + w + ' ' + hh, class: 'spark' });
+  svg.appendChild(svgEl('polyline', { points: hours.map((x, i) => pt(x, i).join(',')).join(' '), class: 'sp-' + level, pathLength: 1 }));
+  const i = hours.findIndex(x => x.hour === nowH);
+  if (i >= 0) { const c = pt(hours[i], i); svg.appendChild(svgEl('circle', { cx: c[0], cy: c[1], r: 3, class: 'sp-' + level })); }
+  return svg;
+}
+function gaugeTile(j) {
+  const d = j.days.find(x => x.date === localDate()), nowH = new Date().getHours(), h = d && d.hours.find(x => x.hour === nowH);
+  if (!h) return null;
+  const closed = h.open === false, lvl = closed ? 'closed' : h.level, c = closed ? 0 : h.crowd;
+  const t = el('div', 'tile gauge'); t.appendChild(el('small', '', 'Right now'));
+  const svg = svgEl('svg', { viewBox: '0 0 120 72', class: 'gsvg' }), arcD = 'M10 62 A50 50 0 0 1 110 62';
+  svg.appendChild(svgEl('path', { d: arcD, class: 'gtrack', pathLength: 100 }));
+  const arc = svgEl('path', { d: arcD, class: 'garc g-' + lvl, pathLength: 100 }); arc.style.strokeDasharray = calm ? c + ' 100' : '0 100'; svg.appendChild(arc);
+  const needle = svgEl('line', { x1: 60, y1: 62, x2: 60, y2: 24, class: 'gneedle' });
+  needle.style.transformOrigin = '60px 62px'; needle.style.transformBox = 'view-box';
+  const deg = -90 + c * 1.8; needle.style.transform = 'rotate(' + (calm ? deg : -90) + 'deg)';
+  svg.appendChild(needle); svg.appendChild(svgEl('circle', { cx: 60, cy: 62, r: 4, class: 'ghub' }));
+  t.appendChild(svg);
+  t.appendChild(el('b', '', closed ? 'Closed' : { low: 'Quiet', medium: 'Busy', high: 'Packed' }[h.level]));
+  t.appendChild(el('span', '', closed ? 'closed this hour' : c + '% crowded, about ' + h.est_wait_minutes + ' min wait'));
+  if (!calm) requestAnimationFrame(() => requestAnimationFrame(() => { arc.style.strokeDasharray = c + ' 100'; needle.style.transform = 'rotate(' + deg + 'deg)'; }));
+  return t;
+}
+let nearTok = 0;
+let nearHour = null;
+async function rankNearby() {
+  const tok = ++nearTok, box = document.getElementById('near'), nowH = new Date().getHours(), h = nearHour != null ? nearHour : Math.min(23, Math.max(8, nowH));
+  const label = nearHour == null && nowH === h ? 'right now' : 'at ' + pad(h) + ':00';
+  box.textContent = '';
+  const cand = list.filter(r => r.lat != null && r.lng != null).slice(0, 8);
+  if (!cand.length) return;
+  const card = el('div', 'card'), head = el('div', 'nearhead'), title = el('div', 'src', 'Quietest nearby ' + label + '...');
+  const pick = el('select'); pick.appendChild(new Option('Now', ''));
+  for (let x = 11; x <= 23; x++) pick.appendChild(new Option(pad(x) + ':00', String(x)));
+  pick.value = nearHour == null ? '' : String(nearHour);
+  pick.onchange = () => { nearHour = pick.value === '' ? null : +pick.value; rankNearby(); };
+  head.appendChild(title); head.appendChild(pick); card.appendChild(head); box.appendChild(card);
+  const day = localDate();
+  const res = await Promise.allSettled(cand.map(async r => {
+    const j = await (await fetch('/t/omidteam/timing?' + new URLSearchParams({ id: r.id, lat: r.lat, lng: r.lng, from: day, to: day, country: 'SE' }), { signal: AbortSignal.timeout(15000) })).json();
+    const x = j.days && j.days[0] && j.days[0].hours.find(q => q.hour === h);
+    if (!x || x.open === false) throw new Error('closed');
+    return { r, x, hours: j.days[0].hours };
+  }));
+  if (tok !== nearTok) return;
+  const rows = res.filter(q => q.status === 'fulfilled').map(q => q.value).sort((a, b) => a.x.crowd - b.x.crowd).slice(0, 5);
+  if (!rows.length) { title.textContent = 'No open restaurants found ' + label; return; }
+  title.textContent = 'Quietest nearby ' + label + ' (tap to open)';
+  rows.forEach((v, i) => {
+    const b = el('button', 'near-row'); b.type = 'button'; b.style.setProperty('--i', i);
+    b.appendChild(el('i', v.x.level)); b.appendChild(el('b', '', v.r.name));
+    b.appendChild(spark(v.hours, h, v.x.level)); b.appendChild(el('small', '', v.x.crowd + '% crowded, about ' + v.x.est_wait_minutes + ' min wait'));
+    b.onclick = () => { demo.value = String(list.indexOf(v.r)); demo.dispatchEvent(new Event('change')); window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' }); };
+    card.appendChild(b);
+  });
+}
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 const pad = n => String(n).padStart(2, '0');
 const win = t => t.length ? t[0].time + '-' + pad(+t[t.length - 1].time.slice(0, 2) + 1) + ':00' : null;
 const dayName = s => new Date(s + 'T12:00:00Z').toLocaleDateString('en', { weekday: 'short', day: 'numeric', month: 'short' });
 let data = null, sel = 0, curName = '';
 const chip = document.getElementById('chip');
+const compact = new URLSearchParams(location.search).get('compact') === '1';
+if (compact) document.documentElement.classList.add('compact');
 const force = new URLSearchParams(location.search).get('motion') === '1';
 if (force) document.documentElement.classList.add('force');
 const calm = !force && window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -188,13 +296,21 @@ function render(again) {
     const r = j.requested, label = { good: 'Good choice', busy: 'Busy then', closed: 'Closed then' }[r.verdict];
     heroAdd(hero, tile('you ' + r.verdict, 'Your time ' + r.time, label, r.verdict === 'good' ? 'about ' + r.est_wait_minutes + ' min wait' : (r.better_time ? 'try ' + r.better_time + ' instead' : 'no better slot')));
   }
+  const g = gaugeTile(j); if (g) heroAdd(hero, g);
   card.appendChild(hero);
   if (slots.length) {
     const b0 = slots.slice().sort((a, c) => a.best_times[0].est_wait_minutes - c.best_times[0].est_wait_minutes || a.date.localeCompare(c.date))[0];
     const btn = el('button', 'tab copy', 'Copy plan'); btn.type = 'button';
     const plan = (curName || f.elements.id.value) + ': go ' + dayName(b0.date) + ' ' + win(b0.best_times) + ', about ' + b0.best_times[0].est_wait_minutes + ' min wait';
     btn.onclick = async () => { try { await navigator.clipboard.writeText(plan); btn.textContent = 'Copied!'; } catch (e) { btn.textContent = plan; } setTimeout(() => { btn.textContent = 'Copy plan'; }, 2000); };
-    const row = el('div', 'tabs'); row.style.marginTop = '10px'; row.appendChild(btn); card.appendChild(row);
+    const lk = el('button', 'tab copy', 'Copy link'); lk.type = 'button';
+    lk.onclick = async () => {
+      const q = new URLSearchParams(new FormData(f)); for (const [k, v] of [...q]) if (v === '') q.delete(k);
+      const url = location.origin + location.pathname + '?' + q;
+      try { await navigator.clipboard.writeText(url); lk.textContent = 'Link copied!'; } catch (e) { lk.textContent = 'Copy failed'; }
+      setTimeout(() => { lk.textContent = 'Copy link'; }, 2000);
+    };
+    const row = el('div', 'tabs copyrow'); row.style.marginTop = '10px'; row.appendChild(btn); row.appendChild(lk); card.appendChild(row);
   }
   out.appendChild(card);
 
@@ -219,6 +335,16 @@ function render(again) {
     chart.appendChild(col); xl.appendChild(el('span', '', h.hour));
   }
   wrap.appendChild(chart); wrap.appendChild(xl); c2.appendChild(wrap); c2.appendChild(read);
+  if (d.factors && d.factors.length) {
+    const why = el('div', 'why'); why.appendChild(document.createTextNode('Why this time:'));
+    d.factors.forEach((t, i) => { const c = el('span', '', t); c.style.setProperty('--i', i); why.appendChild(c); });
+    c2.appendChild(why);
+  }
+  const wet = d.hours.filter(h => h.rain_pct != null && h.rain_pct >= 60 && h.hour >= 8).map(h => h.hour);
+  if (wet.length) {
+    const runs = []; wet.forEach(h => { const r = runs[runs.length - 1]; if (r && r[1] === h - 1) r[1] = h; else runs.push([h, h]); });
+    c2.appendChild(el('div', 'rain', 'Rain likely ' + runs.map(r => pad(r[0]) + ':00-' + pad(r[1] + 1) + ':00').join(', ') + '. Bring an umbrella; the crowd estimate already counts the rain.'));
+  }
   const lg = el('div', 'legend');
   [['low', 'Quiet'], ['medium', 'Busy'], ['high', 'Packed'], ['closed', 'Closed']].forEach(([c, t]) => { const s = el('span'); s.appendChild(el('i', c)); s.appendChild(document.createTextNode(t)); lg.appendChild(s); });
   lg.appendChild(el('span', '', 'Outlined = best window'));
@@ -227,7 +353,7 @@ function render(again) {
   out.appendChild(c2);
 
   if (j.days.length > 1) {
-    const c3 = el('div', 'card'); c3.appendChild(el('div', 'src', 'All days at a glance'));
+    const c3 = el('div', 'card heatcard'); c3.appendChild(el('div', 'src', 'All days at a glance'));
     const heat = el('div', 'heat');
     j.days.forEach(day => {
       const row = el('div', 'row'), cells = el('div', 'cells'); row.appendChild(el('em', '', dayName(day.date)));
@@ -249,6 +375,16 @@ async function run() {
     data = j; sel = 0; render();
   } catch (e) { out.textContent = ''; out.appendChild(el('div', 'card msg', 'Timing is unavailable right now.')); }
 }
+async function quiet() {
+  if (document.hidden || !f.elements.id.value || !data) return;
+  try {
+    const p = new URLSearchParams(new FormData(f)); for (const [k, v] of [...p]) if (v === '') p.delete(k);
+    const j = await (await fetch('/t/omidteam/timing?' + p)).json();
+    if (!j.error && j.days) { data = j; if (sel >= j.days.length) sel = 0; render(true); }
+  } catch (e) { /* keep the old picture */ }
+  if (!compact) rankNearby();
+}
+setInterval(quiet, 300000);
 f.addEventListener('submit', e => { e.preventDefault(); run(); });
 const isDate = v => /^\d{4}-\d{2}-\d{2}/.test(v || ''), isTime = v => /^\d{2}:\d{2}$/.test(v || '');
 let followed = false;
