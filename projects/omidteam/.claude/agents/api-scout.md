@@ -1,7 +1,7 @@
 ---
 include-custom-instructions: true
 name: api-scout
-description: Finds free, keyless public APIs useful for restaurant visit timing (crowds, opening hours, weather, holidays, events). Use when the team needs real data sources.
+description: ASSIGNED to help daniela with discovery APIs for now. Finds free, keyless public APIs useful for restaurant visit timing (crowds, opening hours, weather, holidays, events). Use when the team needs real data sources.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch
 ---
 

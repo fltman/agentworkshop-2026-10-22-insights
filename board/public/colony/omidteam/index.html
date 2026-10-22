@@ -6,14 +6,17 @@ input,select,button{margin:2px;padding:4px}
 .bar{display:inline-block;width:22px;margin-right:2px;vertical-align:bottom;text-align:center;font-size:10px}
 .bar i{display:block}
 .low{background:#3a9}.medium{background:#ec4}.high{background:#e55}
+.call{padding:8px 10px;border-radius:6px;margin:6px 0;font-weight:600}.good{background:#1d4;color:#052}.bad{background:#512;color:#fbb}.src{color:#999;font-size:12px}.closed{background:#555}
 .chart{height:110px;display:flex;align-items:flex-end}
 </style></head><body>
 <h3>Best time to visit</h3>
 <form id="f">
- <input name="id" placeholder="restaurant id" value="demo">
+ <select id="demo" title="demo restaurants"></select>
+ <input name="id" placeholder="restaurant id" value="demo:cafe-1">
+ <input name="lat" type="hidden"><input name="lng" type="hidden"><input name="country" type="hidden" value="SE">
  <input name="from" type="date"><input name="to" type="date">
  <select name="meal"><option>any</option><option>lunch</option><option>dinner</option></select>
- <input name="maxWaitMinutes" type="number" value="15" style="width:60px" title="max wait (min)">
+ <select name="maxWaitMinutes" title="how long can you wait?"><option value="5">wait up to 5 min</option><option value="10">up to 10 min</option><option value="15" selected>up to 15 min</option><option value="30">up to 30 min</option><option value="60">any wait</option></select>
  <button>Go</button>
 </form>
 <div id="out"></div>
@@ -22,6 +25,20 @@ const f = document.getElementById('f'), out = document.getElementById('out');
 const today = new Date().toISOString().slice(0, 10);
 const qs = new URLSearchParams(location.search);
 for (const e of f.elements) if (e.name) e.value = qs.get(e.name) || e.value || (e.type === 'date' ? today : '');
+const DEMO = [
+  ['Demo Cafe Gamla Stan', 'demo:cafe-1', 59.3251, 18.0711],
+  ['Demo Bistro Sodermalm', 'demo:bistro-2', 59.3144, 18.0708],
+  ['Demo Pizzeria Vasastan', 'demo:pizza-3', 59.3427, 18.0494],
+  ['Demo Sushi Norrmalm', 'demo:sushi-4', 59.3326, 18.0649],
+];
+const demo = document.getElementById('demo');
+demo.appendChild(new Option('Pick a demo restaurant', ''));
+DEMO.forEach(d => demo.appendChild(new Option(d[0], d[1])));
+demo.addEventListener('change', () => {
+  const d = DEMO.find(x => x[1] === demo.value);
+  if (!d) return;
+  f.elements.id.value = d[1]; f.elements.lat.value = d[2]; f.elements.lng.value = d[3]; run();
+});
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 async function run() {
   out.textContent = 'Loading...';
@@ -29,12 +46,22 @@ async function run() {
   const j = await r.json();
   out.textContent = '';
   if (j.error) return out.appendChild(el('p', '', j.error));
+  out.appendChild(el('p', 'src', 'Estimates only. Data: ' + j.source));
+  const hh = x => x + ':00';
+  const withSlot = j.days.filter(d => d.best_times.length);
+  if (withSlot.length) {
+    const best = withSlot.slice().sort((a, b) => a.best_times[0].est_wait_minutes - b.best_times[0].est_wait_minutes || a.date.localeCompare(b.date))[0];
+    const t = best.best_times;
+    out.appendChild(el('div', 'call good', 'Best: ' + best.date + ' ' + t[0].time + '-' + hh(String(+t[t.length - 1].time.slice(0, 2) + 1).padStart(2, '0')) + ' (~' + t[0].est_wait_minutes + ' min wait)' + (best.within_max_wait ? '' : ' - above your wait limit')));
+  } else out.appendChild(el('div', 'call bad', 'No open slot in these dates'));
+  const worst = j.days.slice().sort((a, b) => b.busiest.crowd - a.busiest.crowd)[0];
+  if (worst && worst.busiest.crowd >= 65) out.appendChild(el('div', 'call bad', 'Avoid: ' + worst.date + ' ' + worst.busiest.time + ' (busiest, ' + worst.busiest.crowd + '% crowded)'));
   for (const d of j.days) {
-    out.appendChild(el('h4', '', d.date + ' - best: ' + d.best_times.map(b => b.time + ' (~' + b.est_wait_minutes + ' min wait)').join(', ')));
+    out.appendChild(el('h4', '', d.date + ' - ' + (d.best_times.length ? 'go ' + d.best_times[0].time + '-' + hh(String(+d.best_times[d.best_times.length - 1].time.slice(0, 2) + 1).padStart(2, '0')) + ' (~' + d.best_times[0].est_wait_minutes + ' min wait)' : 'closed or no slot')));
     const chart = el('div', 'chart');
     for (const h of d.hours) {
-      const b = el('div', 'bar'); const i = el('i', h.level); i.style.height = Math.max(3, h.crowd) + 'px';
-      b.appendChild(i); b.appendChild(el('span', '', h.hour)); b.title = h.crowd + '% crowded, wait ~' + h.est_wait_minutes + ' min';
+      const b = el('div', 'bar'); const i = el('i', h.open === false ? 'closed' : h.level); i.style.height = Math.max(3, h.crowd) + 'px';
+      b.appendChild(i); b.appendChild(el('span', '', h.hour)); b.title = (h.open === false ? 'closed' : h.crowd + '% crowded, wait ~' + h.est_wait_minutes + ' min');
       chart.appendChild(b);
     }
     out.appendChild(chart);

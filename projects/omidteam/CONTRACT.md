@@ -28,6 +28,7 @@
 Also: `GET /t/omidteam/health`. Frontend widget: `/colony/omidteam/?id=...&from=...&to=...` (embeddable).
 
 Optional extras (all additive, failures fall back silently):
+- Top-level `best_times` [{date, start, end, crowd, est_wait_min}] (one window per day) and `avg_wait_min`, for simple UIs. `max_wait_min` is accepted as an alias of `maxWaitMinutes`.
 - `country=SE` (ISO 2-letter): public holidays via Nager.Date raise crowd slightly.
 - `lat`+`lng` with dates within ~16 days: Open-Meteo rain probability lowers crowd slightly.
 - `id` like `osm:node/123`: OSM opening_hours (hours get `open` true/false, closed hours have crowd 0) and amenity type.

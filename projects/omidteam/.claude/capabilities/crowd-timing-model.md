@@ -4,7 +4,7 @@ type: capability
 domain: visit-timing
 tools: Read, Edit, Bash, WebFetch
 model: haiku
-energy: 60
+energy: 80
 spawned: 2026-10-22
 can-merge-with: []
 ---

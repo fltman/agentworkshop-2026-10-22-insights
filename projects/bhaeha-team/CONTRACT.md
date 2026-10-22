@@ -51,3 +51,15 @@ Notes:
 - `price` may be `null`.
 
 Errors: `400 {"error": "<what is missing or invalid>"}`.
+
+## GET /t/bhaeha-team/restaurants (additive)
+
+Real Stockholm restaurants from Overture Maps (open data, CDLA-Permissive-2.0), served from a bundled file, so it works when Overpass is down. Params: `lat`, `lng` (required), `radius_m` (50-5000, default 600), `limit` (1-100, default 25).
+
+```json
+{ "source": "overture", "restaurants": [
+  { "id": "overture:b38a3c58-...", "name": "Moldau", "lat": 59.3155, "lng": 18.0300, "category": "european_restaurant",
+    "website": "http://...", "phone": "+468847548", "address": "Bergsunds strand 33", "confidence": 1, "distance_m": 120 } ] }
+```
+
+`/menu` also accepts these `overture:<id>` ids. It returns `name`, `phone`, `address`, `website`, and `source: "overture"` (or `"website"` when dish prices were scraped from the site).

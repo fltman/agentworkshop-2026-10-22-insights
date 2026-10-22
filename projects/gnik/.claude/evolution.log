@@ -1,1 +1,3 @@
 # HIVE Evolution Log
+2026-10-22 10:39 SPAWN: review-text-analysis (first analyzer delivered in PR #3, tuning will recur)
+2026-10-22 10:39 SPAWN: review-ingestion (no keyless review API; ingestion/sources are a separate concern, PR #7)
