@@ -106,7 +106,7 @@
     if (!p) return;
     const bad = p.reasons.length > 0;
     p.marker.setStyle({ color: bad ? '#8e1b1b' : '#1a4f9c', fillColor: bad ? '#e53935' : '#2a7fff' });
-    p.marker.setTooltipContent(p.r.name + (bad ? '\n' + p.reasons.join('\n') : ''));
+    p.marker.setTooltipContent(p.r.name + (p.crowd ? '\n' + p.crowd : '') + (bad ? '\n' + p.reasons.join('\n') : ''));
     if (p.button) { p.button.classList.toggle('bad', bad); p.button.title = p.reasons.join('; '); }
   }
   function setReason(id, key, text) {
@@ -160,7 +160,7 @@
         paintPin(r.id);
       });
       renderList(list);
-      addBadges(list.slice(0, 25), params);
+      addBadges(list.slice(0, 25), params); addCrowdNow(list);
       setStatus(list.length + ' restaurants found' + (data.fallback ? ' (fallback: ' + fallbackSource + '; discovery module unavailable)' : (data.source === 'Google Places' ? ' (Google Places)' : '')));
     } catch (e) {
       setStatus('Search failed: ' + e.message);
@@ -278,6 +278,20 @@
       box.appendChild(b);
       if (pins.get(r.id)) { pins.get(r.id).button = b; paintPin(r.id); }
     });
+  }
+
+  async function addCrowdNow(list) {
+    try {
+      const ids = list.filter((r) => /^[A-Za-z0-9:_\/.-]+$/.test(String(r.id))).slice(0, 20);
+      if (!ids.length) return;
+      const d = await getJson('/t/omidteam/now', { ids: ids.map((r) => r.id).join(','), lat: here.lat, lng: here.lng });
+      (d.results || []).forEach((x) => {
+        const p = pins.get(x.id);
+        if (!p) return;
+        p.crowd = 'Right now: ' + x.level + ' crowd' + (x.est_wait_minutes != null ? ', ~' + x.est_wait_minutes + ' min wait' : '');
+        paintPin(x.id);
+      });
+    } catch (e) { /* optional */ }
   }
 
   async function addBadges(list, params) {
