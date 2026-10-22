@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>gnik: review analysis</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; padding: 12px; background: #fff; color: #222; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  h3 { font-size: 13px; margin: 12px 0 4px; }
+  ul { margin: 0; padding-left: 18px; }
+  .flag { border-left: 4px solid #999; padding: 2px 8px; margin: 4px 0; background: #f6f6f6; }
+  .high { border-color: #c0392b; } .medium { border-color: #e67e22; } .low { border-color: #f1c40f; }
+  .muted { color: #777; font-size: 12px; }
+  form { display: flex; gap: 6px; margin-bottom: 8px; }
+  input { flex: 1; padding: 4px; }
+</style>
+</head>
+<body>
+<h2>Review analysis</h2>
+<form id="f"><input id="id" placeholder="restaurant id, e.g. osm:node/123"><button>Load</button></form>
+<div id="out" class="muted">Pass ?id=osm:node/123 or type an id.</div>
+<script>
+// Embed: /colony/gnik/?id=<restaurant_id>. All text is inserted with textContent.
+const out = document.getElementById('out');
+function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+
+async function load(id) {
+  out.replaceChildren(el('div', 'Loading...', 'muted'));
+  try {
+    const r = await fetch('/t/gnik/reviews?id=' + encodeURIComponent(id));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    const frag = document.createDocumentFragment();
+    frag.append(el('div', d.review_count + ' reviews analysed (source: ' + d.source + ')', 'muted'));
+    frag.append(el('h3', 'Suggested meals'));
+    const ul = el('ul');
+    d.suggested_meals.forEach((m) => ul.append(el('li', m.dish + ' (' + m.mentions + ' mentions, sentiment ' + m.sentiment + ')')));
+    frag.append(d.suggested_meals.length ? ul : el('div', 'None yet', 'muted'));
+    frag.append(el('h3', 'Red flags'));
+    if (!d.red_flags.length) frag.append(el('div', 'No red flags found', 'muted'));
+    d.red_flags.forEach((f) => frag.append(el('div', f.text + ' (' + f.evidence_count + ' reviews)', 'flag ' + f.severity)));
+    out.replaceChildren(frag);
+  } catch (e) {
+    out.replaceChildren(el('div', 'Could not load: ' + e.message, 'muted'));
+  }
+}
+
+document.getElementById('f').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = document.getElementById('id').value.trim();
+  if (v) load(v);
+});
+const q = new URLSearchParams(location.search).get('id');
+if (q) { document.getElementById('id').value = q; load(q); }
+</script>
+</body>
+</html>
