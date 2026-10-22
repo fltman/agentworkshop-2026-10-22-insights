@@ -90,6 +90,27 @@ async function lookupOsm(id) {
   }
 }
 
+let places = null;
+function loadPlaces() {
+  if (places) return places;
+  try { places = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'data', 'stockholm.json'), 'utf8')); }
+  catch (err) { console.error('[bhaeha-team] places:', err && err.message); places = []; }
+  return places;
+}
+
+function placeById(id) {
+  return loadPlaces().find((p) => p.id === id) || null;
+}
+
+function nearby(lat, lng, radiusM, limit) {
+  const k = Math.cos(lat * Math.PI / 180);
+  return loadPlaces()
+    .map((p) => ({ ...p, distance_m: Math.round(Math.hypot((p.lat - lat) * 111320, (p.lng - lng) * 111320 * k)) }))
+    .filter((p) => p.distance_m <= radiusM)
+    .sort((a, b) => a.distance_m - b.distance_m)
+    .slice(0, limit);
+}
+
 function httpUrl(u) {
   return typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null;
 }
@@ -168,6 +189,21 @@ function send(res, code, body) {
 module.exports = {
   _scrapeMenu: scrapeMenu,
   async handle(req, res, { path }) {
+    if (req.method === 'GET' && path === '/restaurants') {
+      try {
+        const q = new URL(req.url, 'http://x').searchParams;
+        const lat = Number(q.get('lat'));
+        const lng = Number(q.get('lng'));
+        if (!q.get('lat') || !q.get('lng') || !isFinite(lat) || !isFinite(lng)) return send(res, 400, { error: 'lat and lng are required numbers' }), true;
+        const radius = Math.min(Math.max(Number(q.get('radius_m')) || 600, 50), 5000);
+        const limit = Math.min(Math.max(parseInt(q.get('limit'), 10) || 25, 1), 100);
+        send(res, 200, { source: 'overture', restaurants: nearby(lat, lng, radius, limit) });
+      } catch (err) {
+        console.error('[bhaeha-team]', err && err.message);
+        send(res, 500, { error: 'internal error' });
+      }
+      return true;
+    }
     if (req.method !== 'GET' || path !== '/menu') return false;
     try {
       const q = new URL(req.url, 'http://x').searchParams;
@@ -183,11 +219,13 @@ module.exports = {
       if (!from || !to) return send(res, 400, { error: 'from and to are required, format YYYY-MM-DD' }), true;
       if (to < from) return send(res, 400, { error: 'to must not be before from' }), true;
       if ((to - from) / 86400000 + 1 > MAX_DAYS) return send(res, 400, { error: `range is limited to ${MAX_DAYS} days` }), true;
-      const tags = await lookupOsm(id);
+      const place = id.startsWith('overture:') ? placeById(id) : null;
+      const tags = place ? { website: place.website, phone: place.phone, name: place.name, address: place.address, _overture: true } : await lookupOsm(id);
       const demo = q.get('demo') === '1';
       if (tags && !demo) {
         const out = fromOsm(id, from, to, tags);
-        const items = out.menu_url ? await scrapeMenu(out.menu_url) : [];
+        if (tags._overture) Object.assign(out, { source: 'overture', name: tags.name, phone: tags.phone || null, address: tags.address || null });
+        const items = out.menu_url || out.website ? await scrapeMenu(out.menu_url || out.website) : [];
         if (items.length) {
           for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 86400000)) out.days.push({ date: iso(d), items });
           out.source = 'website';
