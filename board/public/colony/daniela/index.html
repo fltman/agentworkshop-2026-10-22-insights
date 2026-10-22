@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TableWise Management</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #101827; color: #edf4ff; }
+    body { margin: 0; padding: 2rem; }
+    main { max-width: 70rem; margin: auto; }
+    h1 { margin-bottom: .25rem; }
+    .subtle { color: #a8b8cf; }
+    #status { margin: 1.5rem 0; color: #99e6b5; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1rem; }
+    .card { background: #1d2a3e; border: 1px solid #344767; border-radius: .75rem; padding: 1.25rem; }
+    .label { color: #a8b8cf; font-size: .9rem; margin: 0; }
+    .value { font-size: 2rem; font-weight: 700; margin: .35rem 0 0; }
+    .bar { height: .5rem; background: #344767; border-radius: 1rem; margin-top: 1rem; overflow: hidden; }
+    .fill { height: 100%; background: #67d9b0; transition: width .3s ease; }
+    .warning .fill { background: #f5be69; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>TableWise Management</h1>
+    <p class="subtle">Live discovery traffic, refreshed every 10 seconds. All figures are five-minute aggregates unless noted.</p>
+    <p id="status" aria-live="polite">Loading metrics…</p>
+    <section class="grid" aria-label="Management metrics">
+      <article class="card"><p class="label">Active restaurants</p><p class="value" id="restaurants">—</p></article>
+      <article class="card"><p class="label">Active users</p><p class="value" id="users">—</p></article>
+      <article class="card"><p class="label">Searches</p><p class="value" id="searches">—</p></article>
+      <article class="card warning"><p class="label">Provider errors</p><p class="value" id="errors">—</p><div class="bar"><div class="fill" id="error-bar"></div></div></article>
+      <article class="card"><p class="label">Cache hit rate</p><p class="value" id="cache">—</p><div class="bar"><div class="fill" id="cache-bar"></div></div></article>
+      <article class="card"><p class="label">Average search latency</p><p class="value" id="latency">—</p></article>
+    </section>
+  </main>
+  <script>
+    const byId = (id) => document.getElementById(id);
+    const setValue = (id, value) => { byId(id).textContent = value; };
+    const setWidth = (id, value) => { byId(id).style.width = `${Math.max(0, Math.min(100, value))}%`; };
+
+    async function refresh() {
+      try {
+        const response = await fetch('/t/daniela/stats');
+        if (!response.ok) throw new Error(`metrics request failed (${response.status})`);
+        const metrics = await response.json();
+        setValue('restaurants', metrics.active.restaurants_recent);
+        setValue('users', metrics.active.users_recent);
+        setValue('searches', `${metrics.searches.recent} / ${metrics.searches.total}`);
+        setValue('errors', metrics.searches.errors_recent);
+        setValue('cache', `${Math.round(metrics.searches.cache_hit_rate_recent * 100)}%`);
+        setValue('latency', `${metrics.searches.average_latency_ms_recent} ms`);
+        setWidth('error-bar', metrics.searches.recent ? (metrics.searches.errors_recent / metrics.searches.recent) * 100 : 0);
+        setWidth('cache-bar', metrics.searches.cache_hit_rate_recent * 100);
+        setValue('status', `Updated ${new Date(metrics.generated_at).toLocaleTimeString()} · ${metrics.period_seconds / 60}-minute window`);
+      } catch (error) {
+        setValue('status', error instanceof Error ? error.message : 'Unable to load metrics');
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 10_000);
+  </script>
+</body>
+</html>

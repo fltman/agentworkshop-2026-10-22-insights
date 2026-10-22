@@ -45,6 +45,32 @@ Team `daniela` owns restaurant discovery and contact data.
 `restaurant_id`, `lat`, and `lng` are the cross-team identity fields. Consumers must tolerate missing optional
 restaurant fields.
 
+## Management Statistics
+
+`GET /t/daniela/stats` powers the management tile at `/colony/daniela/`.
+
+```json
+{
+  "generated_at": "2026-10-22T10:40:00.000Z",
+  "period_seconds": 300,
+  "uptime_seconds": 120,
+  "searches": {
+    "total": 42,
+    "recent": 12,
+    "errors_recent": 1,
+    "cache_hit_rate_recent": 0.5,
+    "average_latency_ms_recent": 164
+  },
+  "active": {
+    "users_recent": 4,
+    "restaurants_recent": 31
+  }
+}
+```
+
+“Users” means unique anonymous search clients observed during the five-minute reporting window.
+The service stores no user profile and never exposes client identifiers.
+
 ## Provider Discovery
 
 The initial provider is [OpenStreetMap Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API),

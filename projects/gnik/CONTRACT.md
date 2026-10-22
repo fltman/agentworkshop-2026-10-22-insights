@@ -30,6 +30,9 @@ Errors: 400 `{ "error": "id required" }`. If no reviews are available, lists are
 
 Alias: `/t/gnik/reviews` is identical. `restaurant_id` is accepted as a synonym for `id`; `from`/`to` are accepted and ignored.
 
+## POST /t/gnik/reviews?id=<id>
+Body `{ "reviews": ["text", ...] }` (or `{ "review": "text" }`). Stores up to 200 reviews per restaurant; returns 201 `{ id, stored, review_count }`. Once a restaurant has stored reviews, GET returns `source: "reviews"` instead of `"mock"`.
+
 ## Example
 `GET /t/gnik/analysis?id=osm:123&lat=59.33&lng=18.06&name=Trattoria`
 

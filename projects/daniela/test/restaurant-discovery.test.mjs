@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import discovery from '../../../board/plugins/daniela/index.js';
 
-async function invoke(url) {
+async function invoke(url, path = '/search') {
   let status;
   let body = '';
   const response = {
@@ -17,9 +17,9 @@ async function invoke(url) {
   };
 
   const handled = await discovery.handle(
-    { method: 'GET', url },
+    { method: 'GET', url, headers: {}, socket: { remoteAddress: '127.0.0.1' } },
     response,
-    { path: '/search' },
+    { path },
   );
   return { handled, status, body: JSON.parse(body) };
 }
@@ -36,6 +36,8 @@ test('normalizes and caches Overpass restaurant results', async (t) => {
   let calls = 0;
   const provider = http.createServer((request, response) => {
     calls += 1;
+    assert.equal(request.headers.accept, 'application/json');
+    assert.equal(request.headers['user-agent'], 'tablewise-workshop/1.0');
     request.resume();
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify({
@@ -89,4 +91,15 @@ test('normalizes and caches Overpass restaurant results', async (t) => {
   });
   assert.deepEqual(second.body, first.body);
   assert.equal(calls, 1);
+});
+
+test('reports aggregate traffic without client identifiers', async () => {
+  const result = await invoke('/stats', '/stats');
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.period_seconds, 300);
+  assert.ok(result.body.searches.total >= 2);
+  assert.ok(result.body.active.users_recent >= 1);
+  assert.ok(result.body.active.restaurants_recent >= 1);
+  assert.equal(JSON.stringify(result.body).includes('127.0.0.1'), false);
 });
