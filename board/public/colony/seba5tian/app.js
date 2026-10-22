@@ -55,7 +55,9 @@
     setStatus('Searching...');
     markers.clearLayers();
     try {
-      const data = await getJson(modules.discovery.path, {
+      let data;
+      try {
+        data = await getJson(modules.discovery.path, {
         lat: here.lat,
         lng: here.lng,
         radius_m: (params.location && params.location.radius_m) || 1500,
@@ -63,17 +65,55 @@
         price_min: params.price_min || 1,
         price_max: params.price_max || 4,
         limit: 50,
-      });
+        });
+      } catch (e) {
+        data = { restaurants: await overpassFallback(params), fallback: true };
+      }
       let list = (data.restaurants || data || []).map(normalize);
       list = list.filter((r) => !params.price_max || !r.price || r.price.length <= params.price_max);
       map.setView([here.lat, here.lng], 15);
       list.forEach((r) => {
         L.marker([r.lat, r.lng]).addTo(markers).bindTooltip(r.name).on('click', () => select(r));
       });
-      setStatus(list.length + ' restaurants found');
+      renderList(list);
+      setStatus(list.length + ' restaurants found' + (data.fallback ? ' (direct OSM fallback, discovery module unavailable)' : ''));
     } catch (e) {
       setStatus('Search failed: ' + e.message);
     }
+  }
+
+  // Used only when the discovery module fails: same output shape as discovery, straight from OpenStreetMap.
+  async function overpassFallback(params) {
+    const radius = (params.location && params.location.radius_m) || 1500;
+    const q = '[out:json][timeout:15];nwr["amenity"="restaurant"]["name"](around:' + radius + ',' + here.lat + ',' + here.lng + ');out center tags 50;';
+    const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: new URLSearchParams({ data: q }) });
+    if (!r.ok) throw new Error('OSM fallback HTTP ' + r.status);
+    const j = await r.json();
+    const wanted = new Set(params.cuisines || []);
+    return (j.elements || []).map((e) => {
+      const t = e.tags || {};
+      const cuisines = (t.cuisine || '').split(';').map((x) => x.trim()).filter(Boolean);
+      return {
+        restaurant_id: 'osm:' + e.type + '/' + e.id,
+        name: t.name,
+        lat: e.lat != null ? e.lat : e.center && e.center.lat,
+        lng: e.lon != null ? e.lon : e.center && e.center.lon,
+        cuisines,
+        contact: { phone: t.phone || t['contact:phone'], website: t.website || t['contact:website'], opening_hours: t.opening_hours,
+          address: [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ') || null },
+      };
+    }).filter((x) => x.lat != null && x.lng != null && (!wanted.size || x.cuisines.some((c) => wanted.has(c.toLowerCase()))));
+  }
+
+  function renderList(list) {
+    const box = $('#list');
+    box.replaceChildren();
+    list.forEach((r) => {
+      const b = el('button', r.name + (r.price ? '  ' + r.price : ''), 'item');
+      b.type = 'button';
+      b.addEventListener('click', () => { map.setView([r.lat, r.lng], 17); select(r); });
+      box.appendChild(b);
+    });
   }
 
   function unavailable(id, why) {

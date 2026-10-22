@@ -20,3 +20,5 @@ button#locate { background: #555; }
 .flag { color: #a00; }
 ul { margin: 4px 0; padding-left: 18px; }
 @media (max-width: 800px) { main { grid-template-columns: 1fr; grid-template-areas: "search" "map" "details"; } }
+#list { max-height: 20vh; overflow: auto; display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; }
+#list .item { background: #eee; color: #222; font-size: 12px; }
