@@ -21,7 +21,8 @@ The form calls `window.TableWise.onSearch(params)` (the UI exposes it), or posts
 ```json
 {
   "from": "2026-11-03",
-  "to": "2026-11-05",
+  "to": "2026-11-03",
+  "time": "19:00",
   "location": { "lat": 59.3293, "lng": 18.0686, "radius_m": 1500 },
   "cuisines": ["italian", "vegetarian"],
   "price_min": 1,
@@ -31,6 +32,7 @@ The form calls `window.TableWise.onSearch(params)` (the UI exposes it), or posts
 }
 ```
 
+`from` and `to` are the same visit date (single date + time since 11:13); `time` HH:MM is optional and is also sent to every widget call.
 `cuisines`, `diet` optional (empty = any). `radius_m` optional (default 1500).
 
 ## 2. Discovery (daniela) -> list of Restaurant
