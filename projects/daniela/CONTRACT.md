@@ -14,8 +14,10 @@ Team `daniela` owns restaurant discovery and contact data.
 | --- | --- | --- |
 | `lat` | Yes | Latitude from -90 to 90. |
 | `lng` | Yes | Longitude from -180 to 180. |
-| `radiusMeters` | No | Search radius from 100 to 5,000; defaults to 1,500. |
-| `cuisine` | No | Comma-separated cuisine tags, such as `italian,japanese`. |
+| `radius_m` | No | Search radius from 100 to 5,000; defaults to 1,500. `radiusMeters` remains accepted as an alias. |
+| `cuisines` | No | Comma-separated cuisine tags, such as `italian,japanese`. `cuisine` remains accepted as an alias. |
+| `price_min` | No | Lowest accepted price level from 1 to 4. |
+| `price_max` | No | Highest accepted price level from 1 to 4. |
 | `limit` | No | Result limit from 1 to 50; defaults to 20. |
 
 ### Response
@@ -24,12 +26,12 @@ Team `daniela` owns restaurant discovery and contact data.
 {
   "restaurants": [
     {
-      "id": "osm-node-123",
+      "restaurant_id": "osm:node/123",
       "name": "Example Bistro",
       "lat": 59.3293,
       "lng": 18.0686,
       "cuisines": ["italian"],
-      "priceLevel": "$$",
+      "price_level": 2,
       "address": "Example Street 1, Stockholm",
       "phone": "+46 8 123 45 67",
       "website": "https://example.test",
@@ -40,7 +42,7 @@ Team `daniela` owns restaurant discovery and contact data.
 }
 ```
 
-`id`, `lat`, and `lng` are the cross-team identity fields. Consumers must tolerate missing optional
+`restaurant_id`, `lat`, and `lng` are the cross-team identity fields. Consumers must tolerate missing optional
 restaurant fields.
 
 ## Provider Discovery

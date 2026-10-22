@@ -26,19 +26,24 @@ function parseSearch(url) {
   const lat = numberParameter(url.searchParams.get('lat'), 'lat', -90, 90);
   const lng = numberParameter(url.searchParams.get('lng'), 'lng', -180, 180);
   const radiusMeters = numberParameter(
-    url.searchParams.get('radiusMeters'),
-    'radiusMeters',
+    url.searchParams.get('radius_m') || url.searchParams.get('radiusMeters'),
+    'radius_m',
     100,
     5_000,
     1_500,
   );
   const limit = numberParameter(url.searchParams.get('limit'), 'limit', 1, 50, 20);
-  const cuisines = (url.searchParams.get('cuisine') || '')
+  const cuisines = (url.searchParams.get('cuisines') || url.searchParams.get('cuisine') || '')
     .split(',')
     .map((cuisine) => cuisine.trim().toLowerCase())
     .filter(Boolean);
+  const priceMin = numberParameter(url.searchParams.get('price_min'), 'price_min', 1, 4, null);
+  const priceMax = numberParameter(url.searchParams.get('price_max'), 'price_max', 1, 4, null);
+  if (priceMin !== null && priceMax !== null && priceMin > priceMax) {
+    throw new Error('price_min must not exceed price_max');
+  }
 
-  return { lat, lng, radiusMeters, limit, cuisines };
+  return { lat, lng, radiusMeters, limit, cuisines, priceMin, priceMax };
 }
 
 function overpassQuery({ lat, lng, radiusMeters }) {
@@ -50,7 +55,7 @@ function priceLevel(price) {
     return null;
   }
   const count = (price.match(/\$/g) || []).length;
-  return count ? '$'.repeat(Math.min(count, 4)) : price;
+  return count ? Math.min(count, 4) : null;
 }
 
 function address(tags) {
@@ -70,12 +75,12 @@ function normalize(element) {
   }
 
   return {
-    id: `osm-${element.type}-${element.id}`,
+    restaurant_id: `osm:${element.type}/${element.id}`,
     name: tags.name,
     lat,
     lng,
     cuisines: (tags.cuisine || '').split(';').map((value) => value.trim()).filter(Boolean),
-    priceLevel: priceLevel(tags.price),
+    price_level: priceLevel(tags.price),
     address: address(tags),
     phone: tags.phone || tags['contact:phone'] || null,
     website: tags.website || tags['contact:website'] || null,
@@ -106,6 +111,8 @@ async function restaurants(search) {
     .map(normalize)
     .filter(Boolean)
     .filter((restaurant) => !cuisineSet.size || restaurant.cuisines.some((cuisine) => cuisineSet.has(cuisine.toLowerCase())))
+    .filter((restaurant) => search.priceMin === null || restaurant.price_level === null || restaurant.price_level >= search.priceMin)
+    .filter((restaurant) => search.priceMax === null || restaurant.price_level === null || restaurant.price_level <= search.priceMax)
     .slice(0, search.limit);
 
   cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, restaurants: results });
@@ -127,7 +134,11 @@ module.exports = {
       sendJson(res, 200, { restaurants: await restaurants(search) });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unexpected discovery error';
-      const status = message.includes('must be a number') || message.endsWith('is required') ? 400 : 502;
+      const status = message.includes('must be a number')
+        || message.endsWith('is required')
+        || message === 'price_min must not exceed price_max'
+        ? 400
+        : 502;
       sendJson(res, status, { error: message });
     }
     return true;

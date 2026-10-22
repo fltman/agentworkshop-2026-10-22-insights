@@ -68,18 +68,18 @@ test('normalizes and caches Overpass restaurant results', async (t) => {
     provider.close();
   });
 
-  const first = await invoke('/search?lat=59.3293&lng=18.0686&cuisine=italian');
-  const second = await invoke('/search?lat=59.3293&lng=18.0686&cuisine=italian');
+  const first = await invoke('/search?lat=59.3293&lng=18.0686&radius_m=1500&cuisines=italian&price_min=2&price_max=3');
+  const second = await invoke('/search?lat=59.3293&lng=18.0686&radius_m=1500&cuisines=italian&price_min=2&price_max=3');
 
   assert.equal(first.status, 200);
   assert.deepEqual(first.body, {
     restaurants: [{
-      id: 'osm-node-123',
+      restaurant_id: 'osm:node/123',
       name: 'Example Bistro',
       lat: 59.3293,
       lng: 18.0686,
       cuisines: ['italian', 'pizza'],
-      priceLevel: '$$',
+      price_level: 2,
       address: 'Example Street 1',
       phone: '+46 8 123 45 67',
       website: null,
