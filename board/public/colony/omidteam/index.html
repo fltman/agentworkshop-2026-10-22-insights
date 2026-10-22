@@ -1,30 +1,73 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Visit timing</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Best time to visit</title>
 <style>
-body{font:14px system-ui;margin:12px;background:#111;color:#eee}
-input,select,button{margin:2px;padding:4px}
-.bar{display:inline-block;width:22px;margin-right:2px;vertical-align:bottom;text-align:center;font-size:10px}
-.bar i{display:block}
-.low{background:#3a9}.medium{background:#ec4}.high{background:#e55}
-.call{padding:8px 10px;border-radius:6px;margin:6px 0;font-weight:600}.good{background:#1d4;color:#052}.bad{background:#512;color:#fbb}.src{color:#999;font-size:12px}.closed{background:#555}
-.chart{height:110px;display:flex;align-items:flex-end}
+:root{--bg:#f3f2ee;--card:#fff;--ink:#1f2328;--mut:#6b7280;--line:#e7e5df;--acc:#b3301f;--low:#2a9d8f;--mid:#f4b942;--high:#e4572e;--closed:#d9d7d0}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.card{background:var(--card);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:14px;margin-bottom:12px}
+h1{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+h1 i{width:8px;height:8px;border-radius:50%;background:var(--acc);display:inline-block}
+form{display:flex;flex-wrap:wrap;gap:8px}
+form label{display:flex;flex-direction:column;font-size:11px;color:var(--mut);gap:2px}
+input,select,button{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+button.go-btn{background:var(--acc);color:#fff;border-color:var(--acc);cursor:pointer;align-self:flex-end;font-weight:600}
+.hero{display:flex;gap:12px;flex-wrap:wrap}
+.tile{flex:1 1 200px;border-radius:12px;padding:12px 14px;border:1px solid var(--line)}
+.tile small{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+.tile b{display:block;font-size:22px;margin:2px 0}
+.tile span{color:var(--mut);font-size:12px}
+.go{background:#e8f6f3;border-color:#bfe5df}.go b{color:#1b7a6e}
+.avoid{background:#fdeeea;border-color:#f6cfc4}.avoid b{color:#b53a1c}
+.you.good{background:#e8f6f3;border-color:#bfe5df}.you.good b{color:#1b7a6e}
+.you.busy,.you.closed{background:#fdeeea;border-color:#f6cfc4}.you.busy b,.you.closed b{color:#b53a1c}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tab{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer}
+.tab.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.chartwrap{position:relative;padding-left:30px;padding-top:16px}
+.grid{position:absolute;left:0;right:0;top:16px;height:150px;pointer-events:none}
+.grid div{position:absolute;left:30px;right:0;border-top:1px dashed var(--line)}
+.grid span{position:absolute;left:-30px;font-size:10px;color:var(--mut);transform:translateY(-50%)}
+.chart{display:flex;align-items:flex-end;gap:4px;height:150px;position:relative}
+.col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;position:relative}
+.bar{border-radius:6px 6px 2px 2px;min-height:4px;transition:transform .12s}
+.col:hover .bar{filter:brightness(1.1)}
+.low{background:linear-gradient(var(--low),#52b8ab)}.medium{background:linear-gradient(var(--mid),#f7cf78)}.high{background:linear-gradient(var(--high),#ee8461)}
+.closed{background:repeating-linear-gradient(45deg,var(--closed),var(--closed) 4px,#eceae4 4px,#eceae4 8px)}
+.col.best .bar{outline:2px solid #1b7a6e;outline-offset:1px}
+.col.me::after{content:"you";position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--acc)}
+.col.now::before{content:"";position:absolute;top:0;bottom:0;left:50%;border-left:2px dotted var(--acc);opacity:.6}
+.xl{display:flex;gap:4px;margin-top:4px}.xl span{flex:1;text-align:center;font-size:10px;color:var(--mut)}
+.read{min-height:20px;margin-top:8px;font-size:12px;color:var(--mut)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--mut);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.src{color:var(--mut);font-size:11px;margin-top:6px}
+.msg{padding:16px;text-align:center;color:var(--mut)}
+.heat{display:grid;gap:3px;margin-top:4px}
+.heat .row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut)}.heat .row em{width:80px;font-style:normal}
+.heat .cells{display:flex;gap:2px;flex:1}.heat .cells b{flex:1;height:12px;border-radius:3px;display:block}
 </style></head><body>
-<h3>Best time to visit</h3>
+<div class="card">
+<h1><i></i>Best time to visit</h1>
 <form id="f">
- <select id="demo" title="demo restaurants"></select>
- <input name="id" placeholder="restaurant id" value="demo:cafe-1">
+ <label>Demo restaurant<select id="demo"></select></label>
+ <label>Restaurant id<input name="id" value="demo:cafe-1" size="14"></label>
+ <label>From<input name="from" type="date"></label>
+ <label>To<input name="to" type="date"></label>
+ <label>Visit time<input name="time" type="time"></label>
+ <label>Meal<select name="meal"><option value="any">Any</option><option value="lunch">Lunch</option><option value="dinner">Dinner</option></select></label>
+ <label>Max wait<select name="maxWaitMinutes"><option value="5">5 min</option><option value="10">10 min</option><option value="15" selected>15 min</option><option value="30">30 min</option><option value="60">Any</option></select></label>
  <input name="lat" type="hidden"><input name="lng" type="hidden"><input name="country" type="hidden" value="SE">
- <input name="from" type="date"><input name="to" type="date">
- <select name="meal"><option>any</option><option>lunch</option><option>dinner</option></select>
- <select name="maxWaitMinutes" title="how long can you wait?"><option value="5">wait up to 5 min</option><option value="10">up to 10 min</option><option value="15" selected>up to 15 min</option><option value="30">up to 30 min</option><option value="60">any wait</option></select>
- <button>Go</button>
+ <button class="go-btn">Check</button>
 </form>
+</div>
 <div id="out"></div>
 <script>
 const f = document.getElementById('f'), out = document.getElementById('out');
 const today = new Date().toISOString().slice(0, 10);
 const qs = new URLSearchParams(location.search);
 for (const e of f.elements) if (e.name) e.value = qs.get(e.name) || e.value || (e.type === 'date' ? today : '');
+if (qs.get('max_wait_min')) f.elements.maxWaitMinutes.value = qs.get('max_wait_min');
 const DEMO = [
   ['Demo Cafe Gamla Stan', 'demo:cafe-1', 59.3251, 18.0711],
   ['Demo Bistro Sodermalm', 'demo:bistro-2', 59.3144, 18.0708],
@@ -32,40 +75,89 @@ const DEMO = [
   ['Demo Sushi Norrmalm', 'demo:sushi-4', 59.3326, 18.0649],
 ];
 const demo = document.getElementById('demo');
-demo.appendChild(new Option('Pick a demo restaurant', ''));
+demo.appendChild(new Option('Pick one...', ''));
 DEMO.forEach(d => demo.appendChild(new Option(d[0], d[1])));
 demo.addEventListener('change', () => {
-  const d = DEMO.find(x => x[1] === demo.value);
-  if (!d) return;
+  const d = DEMO.find(x => x[1] === demo.value); if (!d) return;
   f.elements.id.value = d[1]; f.elements.lat.value = d[2]; f.elements.lng.value = d[3]; run();
 });
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-async function run() {
-  out.textContent = 'Loading...';
-  const r = await fetch('/t/omidteam/timing?' + new URLSearchParams(new FormData(f)));
-  const j = await r.json();
+const pad = n => String(n).padStart(2, '0');
+const win = t => t.length ? t[0].time + '-' + pad(+t[t.length - 1].time.slice(0, 2) + 1) + ':00' : null;
+const dayName = s => new Date(s + 'T12:00:00Z').toLocaleDateString('en', { weekday: 'short', day: 'numeric', month: 'short' });
+let data = null, sel = 0;
+
+function tile(cls, small, big, sub) {
+  const t = el('div', 'tile ' + cls); t.appendChild(el('small', '', small)); t.appendChild(el('b', '', big)); t.appendChild(el('span', '', sub)); return t;
+}
+
+function render() {
   out.textContent = '';
-  if (j.error) return out.appendChild(el('p', '', j.error));
-  out.appendChild(el('p', 'src', 'Estimates only. Data: ' + j.source));
-  const hh = x => x + ':00';
-  const withSlot = j.days.filter(d => d.best_times.length);
-  if (withSlot.length) {
-    const best = withSlot.slice().sort((a, b) => a.best_times[0].est_wait_minutes - b.best_times[0].est_wait_minutes || a.date.localeCompare(b.date))[0];
-    const t = best.best_times;
-    out.appendChild(el('div', 'call good', 'Best: ' + best.date + ' ' + t[0].time + '-' + hh(String(+t[t.length - 1].time.slice(0, 2) + 1).padStart(2, '0')) + ' (~' + t[0].est_wait_minutes + ' min wait)' + (best.within_max_wait ? '' : ' - above your wait limit')));
-  } else out.appendChild(el('div', 'call bad', 'No open slot in these dates'));
-  const worst = j.days.slice().sort((a, b) => b.busiest.crowd - a.busiest.crowd)[0];
-  if (worst && worst.busiest.crowd >= 65) out.appendChild(el('div', 'call bad', 'Avoid: ' + worst.date + ' ' + worst.busiest.time + ' (busiest, ' + worst.busiest.crowd + '% crowded)'));
-  for (const d of j.days) {
-    out.appendChild(el('h4', '', d.date + ' - ' + (d.best_times.length ? 'go ' + d.best_times[0].time + '-' + hh(String(+d.best_times[d.best_times.length - 1].time.slice(0, 2) + 1).padStart(2, '0')) + ' (~' + d.best_times[0].est_wait_minutes + ' min wait)' : 'closed or no slot')));
-    const chart = el('div', 'chart');
-    for (const h of d.hours) {
-      const b = el('div', 'bar'); const i = el('i', h.open === false ? 'closed' : h.level); i.style.height = Math.max(3, h.crowd) + 'px';
-      b.appendChild(i); b.appendChild(el('span', '', h.hour)); b.title = (h.open === false ? 'closed' : h.crowd + '% crowded, wait ~' + h.est_wait_minutes + ' min');
-      chart.appendChild(b);
-    }
-    out.appendChild(chart);
+  const j = data, card = el('div', 'card');
+  const slots = j.days.filter(d => d.best_times.length);
+  const hero = el('div', 'hero');
+  if (slots.length) {
+    const b = slots.slice().sort((a, c) => a.best_times[0].est_wait_minutes - c.best_times[0].est_wait_minutes || a.date.localeCompare(c.date))[0];
+    hero.appendChild(tile('go', 'Go', win(b.best_times), dayName(b.date) + ', about ' + b.best_times[0].est_wait_minutes + ' min wait'));
+  } else hero.appendChild(tile('avoid', 'No open slot', 'Closed', 'Try other dates or meal'));
+  const worst = j.days.slice().sort((a, c) => c.busiest.crowd - a.busiest.crowd)[0];
+  if (worst && worst.busiest.crowd >= 55) hero.appendChild(tile('avoid', 'Avoid', worst.busiest.time, dayName(worst.date) + ', ' + worst.busiest.crowd + '% crowded'));
+  if (j.requested) {
+    const r = j.requested, label = { good: 'Good choice', busy: 'Busy then', closed: 'Closed then' }[r.verdict];
+    hero.appendChild(tile('you ' + r.verdict, 'Your time ' + r.time, label, r.verdict === 'good' ? 'about ' + r.est_wait_minutes + ' min wait' : (r.better_time ? 'try ' + r.better_time + ' instead' : 'no better slot')));
   }
+  card.appendChild(hero); out.appendChild(card);
+
+  const c2 = el('div', 'card');
+  if (j.days.length > 1) {
+    const tabs = el('div', 'tabs');
+    j.days.forEach((d, i) => { const t = el('button', 'tab' + (i === sel ? ' on' : ''), dayName(d.date)); t.type = 'button'; t.onclick = () => { sel = i; render(); }; tabs.appendChild(t); });
+    c2.appendChild(tabs);
+  }
+  const d = j.days[sel], wrap = el('div', 'chartwrap'), grid = el('div', 'grid');
+  [100, 50, 0].forEach(v => { const l = el('div'); l.style.top = (150 - v * 1.5) + 'px'; l.appendChild(el('span', '', v)); grid.appendChild(l); });
+  wrap.appendChild(grid);
+  const chart = el('div', 'chart'), xl = el('div', 'xl'), read = el('div', 'read', 'Hover a bar for details.');
+  const bestHours = new Set(d.best_times.map(b => +b.time.slice(0, 2)));
+  const myHour = j.requested && j.requested.date === d.date ? +j.requested.time.slice(0, 2) : null;
+  const nowH = d.date === today ? new Date().getHours() : null;
+  for (const h of d.hours) {
+    const col = el('div', 'col' + (bestHours.has(h.hour) ? ' best' : '') + (h.hour === myHour ? ' me' : '') + (h.hour === nowH ? ' now' : ''));
+    const bar = el('div', 'bar ' + (h.open === false ? 'closed' : h.level)); bar.style.height = Math.max(4, h.crowd * 1.5) + 'px';
+    col.appendChild(bar);
+    col.onmouseenter = () => { read.textContent = pad(h.hour) + ':00  ' + (h.open === false ? 'closed' : h.crowd + '% crowded, about ' + h.est_wait_minutes + ' min wait'); };
+    chart.appendChild(col); xl.appendChild(el('span', '', h.hour));
+  }
+  wrap.appendChild(chart); wrap.appendChild(xl); c2.appendChild(wrap); c2.appendChild(read);
+  const lg = el('div', 'legend');
+  [['low', 'Quiet'], ['medium', 'Busy'], ['high', 'Packed'], ['closed', 'Closed']].forEach(([c, t]) => { const s = el('span'); s.appendChild(el('i', c)); s.appendChild(document.createTextNode(t)); lg.appendChild(s); });
+  lg.appendChild(el('span', '', 'Outlined = best window'));
+  c2.appendChild(lg);
+  c2.appendChild(el('div', 'src', 'Estimates, not live counts. Data: ' + j.source));
+  out.appendChild(c2);
+
+  if (j.days.length > 1) {
+    const c3 = el('div', 'card'); c3.appendChild(el('div', 'src', 'All days at a glance'));
+    const heat = el('div', 'heat');
+    j.days.forEach(day => {
+      const row = el('div', 'row'), cells = el('div', 'cells'); row.appendChild(el('em', '', dayName(day.date)));
+      day.hours.forEach(h => { const b = el('b', h.open === false ? 'closed' : h.level); b.title = pad(h.hour) + ':00 ' + h.crowd + '%'; cells.appendChild(b); });
+      row.appendChild(cells); heat.appendChild(row);
+    });
+    c3.appendChild(heat); out.appendChild(c3);
+  }
+}
+
+async function run() {
+  out.textContent = ''; out.appendChild(el('div', 'card msg', 'Loading...'));
+  try {
+    const p = new URLSearchParams(new FormData(f));
+    for (const [k, v] of [...p]) if (v === '') p.delete(k);
+    const r = await fetch('/t/omidteam/timing?' + p);
+    const j = await r.json();
+    if (j.error) { out.textContent = ''; return out.appendChild(el('div', 'card msg', j.error)); }
+    data = j; sel = 0; render();
+  } catch (e) { out.textContent = ''; out.appendChild(el('div', 'card msg', 'Timing is unavailable right now.')); }
 }
 f.addEventListener('submit', e => { e.preventDefault(); run(); });
 run();

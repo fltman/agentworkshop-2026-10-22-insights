@@ -21,6 +21,7 @@
   const here = { lat: 59.3293, lng: 18.0686 };
   let current = { params: null, restaurant: null };
   let demoMode = false;
+  let fallbackSource = '';
 
   const setStatus = (t) => { $('#status').textContent = t; };
   const body = (id) => { const b = $('#' + id + ' .body'); b.replaceChildren(); return b; };
@@ -40,7 +41,7 @@
       name: r.name || 'Unnamed',
       lat: r.lat,
       lng: r.lng,
-      cuisines: r.cuisines || [],
+      cuisines: r.cuisines || (r.category ? [String(r.category).replace(/_restaurant$/, '').replace(/_/g, ' ')] : []),
       price: r.price_level != null ? '$'.repeat(r.price_level) : (r.priceLevel || null),
       rating: r.rating != null ? r.rating : null,
       phone: c.phone || r.phone || null,
@@ -71,7 +72,7 @@
         limit: 50,
         });
       } catch (e) {
-        data = { restaurants: await overpassFallback(params), fallback: true };
+        data = { restaurants: await fallbackChain(params), fallback: true };
       }
       let list = (data.restaurants || data || []).map(normalize);
       list = list.filter((r) => !params.price_max || !r.price || r.price.length <= params.price_max);
@@ -80,7 +81,8 @@
         L.marker([r.lat, r.lng]).addTo(markers).bindTooltip(r.name).on('click', () => select(r));
       });
       renderList(list);
-      setStatus(list.length + ' restaurants found' + (data.fallback ? (demoMode ? ' (DEMO DATA: discovery and OSM are both unavailable)' : ' (direct OSM fallback, discovery module unavailable)') : ''));
+      addBadges(list.slice(0, 10), params);
+      setStatus(list.length + ' restaurants found' + (data.fallback ? (demoMode ? ' (DEMO DATA: discovery and OSM are both unavailable)' : ' (fallback: ' + fallbackSource + '; discovery module unavailable)') : ''));
     } catch (e) {
       setStatus('Search failed: ' + e.message);
     }
@@ -134,6 +136,18 @@
     }).filter((x) => x.lat != null && x.lng != null && (!wanted.size || x.cuisines.some((c) => wanted.has(c.toLowerCase()))));
   }
 
+  // Fallback order: bhaeha-team bundled Overture data, then OSM directly, then labelled demo data.
+  async function fallbackChain(params) {
+    try {
+      const d = await getJson('/t/bhaeha-team/restaurants', {
+        lat: here.lat, lng: here.lng, radius_m: (params.location && params.location.radius_m) || 1500,
+      });
+      if ((d.restaurants || []).length) { fallbackSource = 'bhaeha-team Overture data'; return d.restaurants; }
+    } catch (e) { /* next */ }
+    fallbackSource = 'OSM direct';
+    return overpassFallback(params);
+  }
+
   function renderList(list) {
     const box = $('#list');
     box.replaceChildren();
@@ -145,6 +159,17 @@
     });
   }
 
+  async function addBadges(list, params) {
+    const buttons = document.querySelectorAll('#list .item');
+    await Promise.all(list.map(async (r, i) => {
+      try {
+        const d = await getJson(modules.timing.path, { id: r.id, lat: r.lat, lng: r.lng, from: params.from, to: params.to, country: 'SE' });
+        const t = (d.best_times || [])[0];
+        if (t && buttons[i]) buttons[i].textContent += '  [best ' + t.start + (t.est_wait_min != null ? ', ~' + t.est_wait_min + ' min' : '') + ']';
+      } catch (e) { /* badge is optional */ }
+    }));
+  }
+
   function unavailable(id, why) {
     body(id).appendChild(el('div', 'Not available' + (why ? ' (' + why + ')' : ''), 'muted'));
   }
@@ -154,7 +179,7 @@
     $('#d-name').textContent = r.name + (r.price ? '  ' + r.price : '');
     renderContact(r);
     const q = { id: r.id, restaurant_id: r.id, name: r.name, lat: r.lat, lng: r.lng };
-    if (current.params) { q.from = current.params.from; q.to = current.params.to; q.maxWaitMinutes = current.params.max_wait_min; }
+    if (current.params) { q.from = current.params.from; q.to = current.params.to; if (current.params.time) q.time = current.params.time; q.maxWaitMinutes = current.params.max_wait_min; }
     loadMenu(q); loadReviews(q); loadTiming(Object.assign({ country: 'SE' }, q));
   }
 
@@ -239,8 +264,9 @@
     ev.preventDefault();
     const f = new FormData(ev.target);
     search({
-      from: f.get('from'),
-      to: f.get('to'),
+      from: f.get('date'),
+      to: f.get('date'),
+      time: f.get('time') || null,
       location: { lat: here.lat, lng: here.lng, radius_m: Number(f.get('radius_m')) || 1500 },
       cuisines: String(f.get('cuisines') || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
       price_min: 1,

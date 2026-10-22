@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="colony" content="group-app">
 <title>TableWise</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css">
@@ -13,8 +14,8 @@
   <section id="search" class="card">
     <!-- Fallback form. bhaeha-team's form/location picker can replace it and call window.TableWise.onSearch(params). -->
     <form id="form">
-      <label>From <input type="date" name="from" required></label>
-      <label>To <input type="date" name="to" required></label>
+      <label>Date <input type="date" name="date" required></label>
+      <label>Time <input type="time" name="time" value="19:00"></label>
       <label>Cuisines <input type="text" name="cuisines" placeholder="italian, thai"></label>
       <label>Price <select name="price_max"><option value="4">any</option><option value="1">$</option><option value="2">up to $$</option><option value="3">up to $$$</option></select></label>
       <label>Max wait (min) <input type="number" name="max_wait_min" value="20" min="0"></label>

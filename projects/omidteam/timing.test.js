@@ -34,3 +34,10 @@ test('max_wait_min alias is honored', async () => {
   const r = await call('/timing?id=t1&from=2026-10-23&max_wait_min=0');
   assert.strictEqual(r.code, 200);
 });
+
+test('time param gives a verdict', async () => {
+  const r = await call('/timing?id=t1&from=2026-10-23&max_wait_min=10&time=20:00');
+  assert.ok(['good', 'busy', 'closed'].includes(r.body.requested.verdict));
+  const none = await call('/timing?id=t1&from=2026-10-23');
+  assert.strictEqual(none.body.requested, null);
+});
