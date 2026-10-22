@@ -3,6 +3,13 @@
 
 const MAX_DAYS = 31;
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+const LIVE_BUDGET_MS = 4000;
+const nearCache = new Map();
 const CACHE_TTL = 6 * 3600 * 1000;
 const cache = new Map();
 const pageCache = new Map();
@@ -86,6 +93,52 @@ async function lookupOsm(id) {
     return tags;
   } catch (err) {
     console.error('[bhaeha-team] overpass:', err && err.message);
+    return null;
+  }
+}
+
+// Live restaurants from OpenStreetMap. Tries mirrors in parallel, first success wins, bounded by LIVE_BUDGET_MS. Returns null on failure.
+async function liveOsmNearby(lat, lng, radiusM, limit) {
+  const key = [lat.toFixed(3), lng.toFixed(3), radiusM, limit].join(':');
+  const hit = nearCache.get(key);
+  if (hit && Date.now() - hit.ts < 10 * 60 * 1000) return hit.list;
+  const body = 'data=' + encodeURIComponent(`[out:json][timeout:8];nwr(around:${radiusM},${lat},${lng})["amenity"="restaurant"]["name"];out center tags ${limit};`);
+  const ask = (url) => fetch(url, {
+    method: 'POST',
+    headers: { 'user-agent': 'tablewise-workshop/1.0', accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+    body,
+    signal: AbortSignal.timeout(LIVE_BUDGET_MS),
+  }).then(async (r) => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (!Array.isArray(j.elements)) throw new Error('bad body');
+    return j.elements;
+  });
+  try {
+    const els = await Promise.any(OVERPASS_MIRRORS.map(ask));
+    const k = Math.cos(lat * Math.PI / 180);
+    const list = els.map((e) => {
+      const t = e.tags || {};
+      const la = e.lat != null ? e.lat : e.center && e.center.lat;
+      const ln = e.lon != null ? e.lon : e.center && e.center.lon;
+      if (la == null || ln == null) return null;
+      return {
+        id: 'osm:' + e.type + ':' + e.id,
+        name: t.name,
+        lat: la,
+        lng: ln,
+        category: t.cuisine ? t.cuisine.split(';')[0] + '_restaurant' : 'restaurant',
+        website: httpUrl(t.website || t['contact:website']),
+        phone: t.phone || t['contact:phone'] || null,
+        address: [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ') || null,
+        opening_hours: t.opening_hours || null,
+        distance_m: Math.round(Math.hypot((la - lat) * 111320, (ln - lng) * 111320 * k)),
+      };
+    }).filter(Boolean).sort((a, b) => a.distance_m - b.distance_m).slice(0, limit);
+    if (list.length) nearCache.set(key, { ts: Date.now(), list });
+    return list.length ? list : null;
+  } catch (err) {
+    console.error('[bhaeha-team] live osm:', err && err.errors ? err.errors.map((x) => x.message).join('; ') : err && err.message);
     return null;
   }
 }
@@ -197,6 +250,10 @@ module.exports = {
         if (!q.get('lat') || !q.get('lng') || !isFinite(lat) || !isFinite(lng)) return send(res, 400, { error: 'lat and lng are required numbers' }), true;
         const radius = Math.min(Math.max(Number(q.get('radius_m')) || 600, 50), 5000);
         const limit = Math.min(Math.max(parseInt(q.get('limit'), 10) || 25, 1), 100);
+        if (q.get('live') === '1') {
+          const live = await liveOsmNearby(lat, lng, radius, limit);
+          if (live) return send(res, 200, { source: 'osm', restaurants: live }), true;
+        }
         send(res, 200, { source: 'overture', restaurants: nearby(lat, lng, radius, limit) });
       } catch (err) {
         console.error('[bhaeha-team]', err && err.message);

@@ -33,7 +33,7 @@
   <button>Fetch</button>
 </form>
 <div class="card">
-  <h2>Nearby restaurants (Stockholm, Overture Maps)</h2>
+  <h2>Nearby restaurants (live OpenStreetMap, Overture fallback)</h2>
   <button type="button" id="loc">Use my location</button>
   <button type="button" id="near">Find nearby</button>
   <span id="nearmsg"></span>
@@ -108,10 +108,10 @@
     nearmsg.textContent = ' Searching...';
     list.replaceChildren();
     try {
-      const r = await fetch('/t/bhaeha-team/restaurants?' + new URLSearchParams({ lat, lng, radius_m: 800, limit: 25 }));
+      const r = await fetch('/t/bhaeha-team/restaurants?' + new URLSearchParams({ lat, lng, radius_m: 800, limit: 25, live: 1 }));
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'failed');
-      nearmsg.textContent = ' ' + j.restaurants.length + ' found';
+      nearmsg.textContent = ' ' + j.restaurants.length + ' found (' + (j.source === 'osm' ? 'live OpenStreetMap' : 'bundled Overture data') + ')';
       for (const e of j.restaurants) {
         const li = el('li');
         const b = el('button', e.name + (e.category ? ' (' + e.category.replace(/_/g, ' ') + ')' : '') + ' ' + e.distance_m + ' m');
