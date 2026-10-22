@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TableWise</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><h1>TableWise</h1><span>Restaurant finder</span></header>
+<main>
+  <section id="search" class="card">
+    <!-- Fallback form. bhaeha-team's form/location picker can replace it and call window.TableWise.onSearch(params). -->
+    <form id="form">
+      <label>From <input type="date" name="from" required></label>
+      <label>To <input type="date" name="to" required></label>
+      <label>Cuisines <input type="text" name="cuisines" placeholder="italian, thai"></label>
+      <label>Price <select name="price_max"><option value="4">any</option><option value="1">$</option><option value="2">up to $$</option><option value="3">up to $$$</option></select></label>
+      <label>Max wait (min) <input type="number" name="max_wait_min" value="20" min="0"></label>
+      <label>Radius (m) <input type="number" name="radius_m" value="1500" min="100" max="5000"></label>
+      <button type="button" id="locate">Use my location</button>
+      <button type="submit">Search</button>
+    </form>
+    <div id="status"></div>
+  </section>
+  <section id="mapcard" class="card"><div id="map"></div></section>
+  <aside id="details" class="card">
+    <h2 id="d-name">Click a restaurant on the map</h2>
+    <div class="widget" id="w-contact"><h3>Contact</h3><div class="body"></div></div>
+    <div class="widget" id="w-menu"><h3>Menu &amp; offers</h3><div class="body"></div></div>
+    <div class="widget" id="w-reviews"><h3>Reviews</h3><div class="body"></div></div>
+    <div class="widget" id="w-timing"><h3>Best time to visit</h3><div class="body"></div></div>
+  </aside>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
