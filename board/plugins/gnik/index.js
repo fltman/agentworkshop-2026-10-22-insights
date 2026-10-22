@@ -72,6 +72,27 @@ function send(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
+const fs = require('fs');
+const path = require('path');
+const MAX_REVIEWS = 200;
+
+function file(ctx, id) {
+  return path.join(ctx.dataDir, `r_${hash(id).toString(16)}.json`);
+}
+
+function load(ctx, id) {
+  try { return JSON.parse(fs.readFileSync(file(ctx, id), 'utf8')); } catch (e) { return []; }
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let b = '';
+    req.on('data', (c) => { b += c; if (b.length > 20000) { reject(new Error('too large')); req.destroy(); } });
+    req.on('end', () => resolve(b));
+    req.on('error', reject);
+  });
+}
+
 module.exports = {
   async handle(req, res, ctx) {
     const url = new URL(req.url, 'http://x');
@@ -79,7 +100,24 @@ module.exports = {
     if (route !== '/analysis' && route !== '/reviews') return false;
     const id = (url.searchParams.get('id') || url.searchParams.get('restaurant_id') || '').slice(0, 200);
     if (!id) { send(res, 400, { error: 'id required' }); return true; }
-    send(res, 200, { id, ...analyze(mockReviews(id)), source: 'mock' });
+    if (req.method === 'POST') {
+      try {
+        const body = JSON.parse(await readBody(req));
+        const texts = (Array.isArray(body.reviews) ? body.reviews : [body.review])
+          .filter((t) => typeof t === 'string' && t.trim()).map((t) => t.slice(0, 1000));
+        if (!texts.length) { send(res, 400, { error: 'review or reviews[] (strings) required' }); return true; }
+        fs.mkdirSync(ctx.dataDir, { recursive: true });
+        const all = load(ctx, id).concat(texts).slice(-MAX_REVIEWS);
+        fs.writeFileSync(file(ctx, id), JSON.stringify(all));
+        send(res, 201, { id, stored: texts.length, review_count: all.length });
+      } catch (e) {
+        send(res, 400, { error: 'invalid JSON body' });
+      }
+      return true;
+    }
+    const real = load(ctx, id);
+    if (real.length) send(res, 200, { id, ...analyze(real), source: 'reviews' });
+    else send(res, 200, { id, ...analyze(mockReviews(id)), source: 'mock' });
     return true;
   },
 };
